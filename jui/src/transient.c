@@ -1,5 +1,7 @@
 #include "jui/transient.h"
 
+#include "SDL3/SDL_render.h"
+
 #include <SDL3/SDL_events.h>
 
 typedef struct jui_state
@@ -42,4 +44,18 @@ void jui_sdl_consume_event(SDL_Event* event)
     }
     break;
   }
+}
+
+void jui_sdl_draw_rect(SDL_Renderer* renderer, f32 x, f32 y, f32 w, f32 h, u8 r, u8 g, u8 b, u8 a)
+{
+  SDL_FRect rect;
+  // TODO(jake): Temp code to test ui_state
+  // rect.x = state.MouseX - w / 2;
+  // rect.y = state.MouseY - h / 2;
+  rect.x = x;
+  rect.y = y;
+  rect.w = w;
+  rect.h = h;
+  SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+  SDL_RenderFillRect(renderer, &rect);
 }

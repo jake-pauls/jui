@@ -11,15 +11,4 @@ add_library(tak STATIC
         src/v4.c)
 
 target_include_directories(tak PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-# Platform specific definitions
-if(WIN32)
-    target_compile_definitions(tak PRIVATE WIN32)
-elseif(APPLE)
-    target_compile_definitions(tak PRIVATE MACOS)
-elseif(UNIX)
-    target_compile_definitions(tak PRIVATE UNIX)
-endif()
-
-# Compiler specific definitions
-target_compile_definitions(tak PRIVATE $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>)
+target_link_libraries(tak PRIVATE common_platform_config)

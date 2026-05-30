@@ -40,7 +40,7 @@ int main()
     {
       jui_sdl_consume_event(&event);
 
-      if (event.type == SDL_EVENT_QUIT)
+      if (event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE))
       {
         isRunning = false;
       }
@@ -52,13 +52,7 @@ int main()
 
     // Render
     {
-      SDL_FRect rect;
-      rect.x = 0;
-      rect.y = 0;
-      rect.w = 64;
-      rect.h = 48;
-      SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-      SDL_RenderFillRect(renderer, &rect);
+      jui_sdl_draw_rect(renderer, 0, 0, 64, 48, 0, 0, 255, 255);
     }
 
     SDL_RenderPresent(renderer);
@@ -70,3 +64,11 @@ int main()
 
   return 0;
 }
+
+#if defined(LINUX)
+void test(){ }
+#endif
+
+#if defined(WIN32)
+void test2() {}
+#endif

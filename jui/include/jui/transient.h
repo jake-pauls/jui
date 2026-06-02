@@ -1,6 +1,7 @@
 #pragma once
 
 // TODO(jake): Is it possible to avoid this?
+#include <stdbool.h>
 #include <tak/types.h>
 
 typedef union SDL_Event SDL_Event;
@@ -8,8 +9,12 @@ typedef struct SDL_Renderer SDL_Renderer;
 
 /// Platform (SDL)
 
-void jui_sdl_consume_event(SDL_Event* event);
+void jui_sdl_consume_event(const SDL_Event* Event);
 
 /// Renderer (SDL)
 
-void jui_sdl_draw_rect(SDL_Renderer* renderer, f32 x, f32 y, f32 w, f32 h, u8 r, u8 g, u8 b, u8 a);
+void jui_sdl_init(SDL_Renderer* Renderer);
+
+/// API
+
+bool jui_button(i32 Id, f32 X, f32 Y, f32 W, f32 H);

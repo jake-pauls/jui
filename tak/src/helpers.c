@@ -1,23 +1,23 @@
 #include "tak/helpers.h"
 
-i32 tak_clamp_i32(i32 a, i32 min, i32 max)
+i32 tak_clamp_i32(i32 A, i32 Min, i32 Max)
 {
-  const i32 b = a < min ? min : a;
-  return b > max ? max : b;
+  const i32 B = A < Min ? Min : A;
+  return B > Max ? Max : B;
 }
 
-f32 tak_clamp_f32(f32 a, f32 min, f32 max)
+f32 tak_clamp_f32(f32 A, f32 Min, f32 Max)
 {
-  const f32 b = a < min ? min : a;
-  return b > max ? max : b;
+  const f32 B = A < Min ? Min : A;
+  return B > Max ? Max : B;
 }
 
-i32 tak_lerp_i32(i32 x, i32 y, i32 alpha)
+i32 tak_lerp_i32(i32 X, i32 Y, i32 Alpha)
 {
-  return (1 - alpha) * x + alpha * y;
+  return (1 - Alpha) * X + Alpha * Y;
 }
 
-f32 tak_lerp_f32(f32 x, f32 y, f32 alpha)
+f32 tak_lerp_f32(f32 X, f32 Y, f32 Alpha)
 {
-  return (1.0f - alpha) * x + alpha * y;
+  return (1.0f - Alpha) * X + Alpha * Y;
 }

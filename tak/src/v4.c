@@ -2,45 +2,45 @@
 
 #include <math.h>
 
-f32 tak_v4_length(v4f a)
+f32 tak_v4_length(V4F A)
 {
-  return sqrtf(tak_v4_length_squared(a));
+  return sqrtf(tak_v4_length_squared(A));
 }
 
-f32 tak_v4_LengthSquared(v4f a)
-{
-  return
-      a.x * a.x +
-      a.y * a.y +
-      a.z * a.z +
-      a.w * a.w;
-}
-
-f32 tak_v4_Dot(v4f a, v4f b)
+f32 tak_v4_LengthSquared(V4F a)
 {
   return
-      a.x * b.x +
-      a.y * b.y +
-      a.z * b.z +
-      a.w * b.w;
+      a.X * a.X +
+      a.Y * a.Y +
+      a.Z * a.Z +
+      a.W * a.W;
 }
 
-v4f tak_v4_Cross(v4f a, v4f b)
+f32 tak_v4_Dot(V4F a, V4F b)
+{
+  return
+      a.X * b.X +
+      a.Y * b.Y +
+      a.Z * b.Z +
+      a.W * b.W;
+}
+
+V4F tak_v4_Cross(V4F a, V4F b)
 {
   return tak_v4(
-      a.y * b.z - a.z * b.y,
-      a.z * b.x - a.x * b.z,
-      a.x * b.y - a.y * b.x,
+      a.Y * b.Z - a.Z * b.Y,
+      a.Z * b.X - a.X * b.Z,
+      a.X * b.Y - a.Y * b.X,
       0.0f
       );
 }
 
-v4f tak_v4_Normalize(v4f a)
+V4F tak_v4_Normalize(V4F a)
 {
   return tak_v4_divide(a, tak_v4_length(a));
 }
 
-v4f tak_v4_Lerp(v4f start, v4f end, f32 alpha)
+V4F tak_v4_Lerp(V4F start, V4F end, f32 alpha)
 {
   return tak_v4_add(
       tak_v4_multiply(start, 1.0f - alpha),

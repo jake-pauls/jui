@@ -1,7 +1,5 @@
 #include <jui/jui.h>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_render.h>
-#include <SDL3/SDL_video.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -13,62 +11,65 @@ int main()
     return 1;
   }
 
-  SDL_Window* window = SDL_CreateWindow("JUI Sandbox", 800, 600, SDL_WINDOW_RESIZABLE);
+  SDL_Window* Window = SDL_CreateWindow("jui sandbox", 800, 600, SDL_WINDOW_RESIZABLE);
 
-  if (!window)
+  if (!Window)
   {
     printf("SDL_CreateWindow Error: %s\n", SDL_GetError());
     SDL_Quit();
     return 1;
   }
 
-  SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+  SDL_Renderer* Renderer = SDL_CreateRenderer(Window, NULL);
 
-  if (!renderer)
+  if (!Renderer)
   {
     printf("SDL_CreateRenderer Error: %s\n", SDL_GetError());
-    SDL_DestroyWindow(window);
+    SDL_DestroyWindow(Window);
     SDL_Quit();
     return 1;
   }
 
-  bool isRunning = true;
-  SDL_Event event;
-  while (isRunning)
-  {
-    while (SDL_PollEvent(&event))
-    {
-      jui_sdl_consume_event(&event);
+  // Init jui
+  jui_sdl_init(Renderer);
 
-      if (event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE))
+  bool IsRunning = true;
+  SDL_Event Event;
+  while (IsRunning)
+  {
+    while (SDL_PollEvent(&Event))
+    {
+      jui_sdl_consume_event(&Event);
+
+      if (Event.type == SDL_EVENT_QUIT || (Event.type == SDL_EVENT_KEY_DOWN && Event.key.key == SDLK_ESCAPE))
       {
-        isRunning = false;
+        IsRunning = false;
       }
     }
 
     // Clear screen
-    SDL_SetRenderDrawColor(renderer, 25, 25, 25, 255);
-    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(Renderer, 25, 25, 25, 255);
+    SDL_RenderClear(Renderer);
 
-    // Render
+    // Render jui
     {
-      jui_sdl_draw_rect(renderer, 0, 0, 64, 48, 0, 0, 255, 255);
+      if (jui_button(1, 0, 0, 64, 48))
+      {
+        printf("First button hit!\n");
+      }
+
+      if (jui_button(2, 0, 64, 64, 48))
+      {
+        printf("Second button hit!\n");
+      }
     }
 
-    SDL_RenderPresent(renderer);
+    SDL_RenderPresent(Renderer);
   }
 
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
+  SDL_DestroyRenderer(Renderer);
+  SDL_DestroyWindow(Window);
   SDL_Quit();
 
   return 0;
 }
-
-#if defined(LINUX)
-void test(){ }
-#endif
-
-#if defined(WIN32)
-void test2() {}
-#endif

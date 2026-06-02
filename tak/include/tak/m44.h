@@ -5,32 +5,32 @@ extern "C" {
 #endif
 
 typedef float f32;
-typedef union v3f v3f;
+typedef union V3F V3F;
 
 /// \brief 4x4 float matrix
-typedef struct m44f
+typedef struct M44F
 {
-  f32 m[4][4];
-} m44f;
+  f32 M[4][4];
+} M44F;
 
 /// \brief Transposes the rows/columns of the input matrix
-/// \param m The matrix to transpose
+/// \param M The matrix to transpose
 /// \returns The transposed version of the provided matrix
-m44f tak_m44_transpose(m44f m);
+M44F tak_m44_transpose(M44F M);
 
 /// \brief Creates a matrix representing a translation by a specified offset
-/// \param offset The vector containing the offset
+/// \param Offset The vector containing the offset
 /// \returns The translation matrix corresponding to the provided offset
-m44f tak_m44_translation(v3f offset);
+M44F tak_m44_translation(V3F Offset);
 
 // TODO(jake): Rotate
 // TODO(jake): Scale
 
 /// \brief Creates a perspective matrix using a left-handed basis
-m44f tak_m44_perspective_left_handed(f32 fov, f32 aspect, f32 nearZ, f32 farZ);
+M44F tak_m44_perspective_left_handed(f32 FOV, f32 Aspect, f32 NearZ, f32 FarZ);
 
 /// \brief Creates a view matrix using a left-handed basis
-m44f tak_m44_look_at_left_handed(v3f eye, v3f focus, v3f up);
+M44F tak_m44_look_at_left_handed(V3F Eye, V3F Focus, V3F Up);
 
 #ifdef __cplusplus
 }
@@ -42,10 +42,10 @@ namespace tak
 {
   using ::M44F;
 
-  inline m44f MatrixTranspose(m44f m) { return tak_m44_transpose(m); }
-  inline m44f MatrixTranslation(v3f offset) { return tak_m44_translation(offset); }
-  inline m44f MatrixPerspectiveLH(f32 fov, f32 aspect, f32 nearZ, f32 farZ) { return tak_m44_perspective_left_handed(fov, aspect, nearZ, farZ); }
-  inline m44f MatrixLookAtLH(v3f eye, v3f focus, v3f up) { return tak_m44_look_at_left_handed(eye, focus, up); }
+  inline M44F MatrixTranspose(M44F M) { return tak_m44_transpose(M); }
+  inline M44F MatrixTranslation(V3F Offset) { return tak_m44_translation(Offset); }
+  inline M44F MatrixPerspectiveLH(f32 FOV, f32 Aspect, f32 NearZ, f32 FarZ) { return tak_m44_perspective_left_handed(FOV, Aspect, NearZ, FarZ); }
+  inline M44F MatrixLookAtLH(V3F Eye, V3F Focus, V3F Up) { return tak_m44_look_at_left_handed(Eye, Focus, Up); }
 }
 
 #endif

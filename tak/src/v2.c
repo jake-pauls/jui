@@ -2,39 +2,39 @@
 
 #include <math.h>
 
-f32 tak_v2_length(v2f a)
+f32 tak_v2_length(V2F A)
 {
-  return sqrtf(tak_v2_length_squared(a));
+  return sqrtf(tak_v2_length_squared(A));
 }
 
-f32 tak_v2_length_squared(v2f a)
+f32 tak_v2_length_squared(V2F A)
 {
-  return a.x * a.x + a.y * a.y;
+  return A.X * A.X + A.Y * A.Y;
 }
 
-f32 tak_v2_dot(v2f a, v2f b)
+f32 tak_v2_dot(V2F A, V2F B)
 {
-  return a.x * b.x + a.y * b.y;
+  return A.X * B.X + A.Y * B.Y;
 }
 
-v2f tak_v2_cross(v2f a, v2f b)
+V2F tak_v2_cross(V2F A, V2F B)
 {
   // In 2D, cross product is scalar in Z; returning XY-style pseudo-vector
   return tak_v2(
-      a.x * b.y - a.y * b.x,
-      a.x * b.y - a.y * b.x
+      A.X * B.Y - A.Y * B.X,
+      A.X * B.Y - A.Y * B.X
       );
 }
 
-v2f tak_v2_normalize(v2f a)
+V2F tak_v2_normalize(V2F A)
 {
-  return tak_v2_divide(a, tak_v2_length(a));
+  return tak_v2_divide(A, tak_v2_length(A));
 }
 
-v2f tak_v2_lerp(v2f start, v2f end, f32 alpha)
+V2F tak_v2_lerp(V2F Start, V2F End, f32 Alpha)
 {
   return tak_v2_add(
-      tak_v2_multiply(start, 1.0f - alpha),
-      tak_v2_multiply(end, alpha)
+      tak_v2_multiply(Start, 1.0f - Alpha),
+      tak_v2_multiply(End, Alpha)
       );
 }

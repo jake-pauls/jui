@@ -2,45 +2,45 @@
 
 #include <math.h>
 
-f32 tak_v3_length(v3f a)
+f32 tak_v3_length(V3F A)
 {
-  return sqrt(tak_v3_length_squared(a));
+  return sqrt(tak_v3_length_squared(A));
 }
 
-f32 tak_v3_length_squared(v3f a)
-{
-  return
-      a.x * a.x +
-      a.y * a.y +
-      a.z * a.z;
-}
-
-f32 tak_v3_dot(v3f a, v3f b)
+f32 tak_v3_length_squared(V3F A)
 {
   return
-      a.x * b.x +
-      a.y * b.y +
-      a.z * b.z;
+      A.X * A.X +
+      A.Y * A.Y +
+      A.Z * A.Z;
 }
 
-v3f tak_v3_cross(v3f a, v3f b)
+f32 tak_v3_dot(V3F A, V3F B)
+{
+  return
+      A.X * B.X +
+      A.Y * B.Y +
+      A.Z * B.Z;
+}
+
+V3F tak_v3_cross(V3F A, V3F B)
 {
   return tak_v3(
-      a.y * b.z - a.z * b.y,
-      a.z * b.x - a.x * b.z,
-      a.x * b.y - a.y * b.x
+      A.Y * B.Z - A.Z * B.Y,
+      A.Z * B.X - A.X * B.Z,
+      A.X * B.Y - A.Y * B.X
       );
 }
 
-v3f tak_v3_normalize(v3f a)
+V3F tak_v3_normalize(V3F A)
 {
-  return tak_v3_divide(a, tak_v3_length(a));
+  return tak_v3_divide(A, tak_v3_length(A));
 }
 
-v3f take_v3_lerp(v3f start, v3f end, f32 alpha)
+V3F take_v3_lerp(V3F Start, V3F End, f32 Alpha)
 {
   return tak_v3_add(
-      tak_v3_multiply(start, 1.0f - alpha),
-      tak_v3_multiply(end, alpha)
+      tak_v3_multiply(Start, 1.0f - Alpha),
+      tak_v3_multiply(End, Alpha)
       );
 }

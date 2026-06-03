@@ -10,9 +10,9 @@
 /// \brief Transposes the rows/columns of the input matrix
 /// \param M The matrix to transpose
 /// \returns The transposed version of the provided matrix
-M44F tak_m44_transpose(M44F M)
+m44f tak_m44_transpose(m44f M)
 {
-    M44F Result = {0};
+    m44f Result = {0};
 
     Result.M[0][0] = M.M[0][0];
     Result.M[0][1] = M.M[1][0];
@@ -40,9 +40,9 @@ M44F tak_m44_transpose(M44F M)
 /// \brief Creates a matrix representing a translation by a specified offset
 /// \param Offset The vector containing the offset
 /// \returns The translate matrix corresponding to the provided offset
-M44F tak_m44_translation(V3F Offset)
+m44f tak_m44_translation(v3f Offset)
 {
-    M44F result = {0};
+    m44f result = {0};
 
     result.M[0][0] = 1.0f;
     result.M[0][1] = 0.0f;
@@ -68,9 +68,9 @@ M44F tak_m44_translation(V3F Offset)
 }
 
 /// \brief Creates a perspective matrix using a left-handed basis
-M44F tak_m44_perspective_left_handed(f32 FOV, f32 Aspect, f32 NearZ, f32 FarZ)
+m44f tak_m44_perspective_left_handed(f32 FOV, f32 Aspect, f32 NearZ, f32 FarZ)
 {
-    M44F result = {0};
+    m44f result = {0};
 
 #if defined(WIN32) && defined(TAK_USE_DX_MATH)
 
@@ -141,9 +141,9 @@ M44F tak_m44_perspective_left_handed(f32 FOV, f32 Aspect, f32 NearZ, f32 FarZ)
 }
 
 /// \brief Creates a view matrix using a left-handed basis
-M44F tak_m44_look_at_left_handed(V3F Eye, V3F Focus, V3F Up)
+m44f tak_m44_look_at_left_handed(v3f Eye, v3f Focus, v3f Up)
 {
-    M44F result = {0};
+    m44f result = {0};
 
 #if defined(WIN32) && defined(TAK_USE_DX_MATH)
 
@@ -180,9 +180,9 @@ M44F tak_m44_look_at_left_handed(V3F Eye, V3F Focus, V3F Up)
 #else
 
     // NOTE(jake): Invert orthogonality for left-handed coordinate system.
-    const V3F f = tak_v3_normalize(tak_v3_subtract(Focus, Eye));
-    const V3F s = tak_v3_normalize(tak_v3_cross(Up, f));
-    const V3F u = tak_v3_cross(f, s);
+    const v3f f = tak_v3_normalize(tak_v3_subtract(Focus, Eye));
+    const v3f s = tak_v3_normalize(tak_v3_cross(Up, f));
+    const v3f u = tak_v3_cross(f, s);
 
     result.M[0][0] = s.V[0];
     result.M[0][1] = u.V[0];

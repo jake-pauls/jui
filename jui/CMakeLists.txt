@@ -7,4 +7,4 @@ add_library(jui STATIC
         src/transient.c)
 
 target_include_directories(jui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(jui PRIVATE common_platform_config tak SDL3::SDL3)
+target_link_libraries(jui PUBLIC common_platform_config core SDL3::SDL3)

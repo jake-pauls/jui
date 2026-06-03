@@ -1,32 +1,36 @@
 #include "jui/transient.h"
 
-#include "SDL3/SDL_render.h"
+#include "core/hash.h"
 
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_render.h>
 
 #define DEFAULT_WIDGET_ID (0)
 
-typedef struct jui_state
+typedef struct jui_state jui_state;
+struct jui_state
 {
   f32 MouseX;
   f32 MouseY;
   bool MouseDown;
   bool MouseUp;
 
-  i32 HotItem;
-  i32 ActiveItem;
-} jui_state;
+  u64 HotItem;
+  u64 ActiveItem;
+};
 
-typedef struct jui_sdl_state
+typedef struct jui_sdl_state jui_sdl_state;
+struct jui_sdl_state
 {
   SDL_Renderer* Renderer;
-} jui_sdl_state;
+};
 
 static jui_state State =
 {
     .MouseX = 0,
     .MouseY = 0,
-    .MouseDown = 0,
+    .MouseDown = false,
+    .MouseUp = false,
     .HotItem = DEFAULT_WIDGET_ID,
     .ActiveItem = DEFAULT_WIDGET_ID,
 };
@@ -36,7 +40,7 @@ static jui_sdl_state SDLState =
   .Renderer = NULL,
 };
 
-/// Platform (SDL)
+/* Platform (SDL) */
 
 void jui_sdl_consume_event(const SDL_Event* Event)
 {
@@ -69,7 +73,7 @@ void jui_sdl_consume_event(const SDL_Event* Event)
   }
 }
 
-/// Renderer (SDL)
+/* Renderer (SDL) */
 
 void jui_sdl_init(SDL_Renderer* Renderer)
 {
@@ -90,7 +94,28 @@ void jui_sdl_draw_rect(SDL_Renderer* Renderer,
   SDL_RenderFillRect(Renderer, &Rect);
 }
 
-void jui_sdl_draw_button(SDL_Renderer* Renderer, const i32 Id,
+void jui_sdl_draw_frame(SDL_Renderer* Renderer, const u64 Id,
+  const f32 X, const f32 Y,
+  const f32 W, const f32 H)
+{
+  if (State.ActiveItem == Id)
+  {
+    // Active color (95% pink)
+    jui_sdl_draw_rect(Renderer, X, Y, W, H, 255, 230, 242, 255);
+  }
+  else if (State.HotItem == Id)
+  {
+    // Hot/hover color (90% pink)
+    jui_sdl_draw_rect(Renderer, X, Y, W, H, 255, 204, 229, 255);
+  }
+  else
+  {
+    // Inactive (80% pink)
+    jui_sdl_draw_rect(Renderer, X, Y, W, H, 255, 153, 202, 255);
+  }
+}
+
+void jui_sdl_draw_button(SDL_Renderer* Renderer, const u64 Id,
   const f32 X, const f32 Y,
   const f32 W, const f32 H)
 {
@@ -111,8 +136,15 @@ void jui_sdl_draw_button(SDL_Renderer* Renderer, const i32 Id,
   }
 }
 
-/// API
+/* API */
 
+/// \brief Simple hit test function for a box defined with an \p X and \p Y coordinate as well
+///        as a provided width and height that is performed against the global state.
+/// \param X The x coordinate used for the hit test.
+/// \param Y The y coordinate used for the hit test.
+/// \param W The width used for the hit test.
+/// \param H The height used for the hit test.
+/// \returns <c>true</c> if the hit test passed for the global state, otherwise <c>false</c>.
 bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   if (State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H)
@@ -122,9 +154,43 @@ bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
   return true;
 }
 
-bool jui_button(const i32 Id, const f32 X, const f32 Y, const f32 W, const f32 H)
+bool jui_begin(const char* Name, const f32 X, const f32 Y, const f32 W, const f32 H)
+{
+  // TODO(jake): Push this ID onto the frame stack.
+  const u64 Id = core_hash_djb2((uchar*)Name);
+
+  // Only set an item as hot if we pass the hit test and do not have a currently active item.
+  // Useful for preventing a click event on another widget if the user clicks and drags off the button.
+  if (jui_hit_test(X, Y, W, H))
+  {
+    if (State.ActiveItem == DEFAULT_WIDGET_ID)
+    {
+      State.HotItem = Id;
+    }
+  }
+  // If we fail the hit test and the current item is hot, reset it.
+  else if (State.HotItem == Id)
+  {
+    State.HotItem = DEFAULT_WIDGET_ID;
+  }
+
+  // TODO(jake): Make a clearer division between the renderer and the GUI
+  jui_sdl_draw_frame(SDLState.Renderer, Id, X, Y, W, H);
+
+  return true;
+}
+
+void jui_end()
+{
+  // TODO(jake): Pop the frame stack.
+}
+
+bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   bool Result = false;
+
+  // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
+  const u64 Id = core_hash_djb2((uchar*)Text);
 
   if (State.ActiveItem == Id)
   {
@@ -160,7 +226,7 @@ bool jui_button(const i32 Id, const f32 X, const f32 Y, const f32 W, const f32 H
     State.HotItem = DEFAULT_WIDGET_ID;
   }
 
-  // TODO(jake): Make a division between the renderer and the GUI
+  // TODO(jake): Make a clearer division between the renderer and the GUI
   jui_sdl_draw_button(SDLState.Renderer, Id, X, Y, W, H);
 
   return Result;

@@ -6,4 +6,4 @@ set(CMAKE_C_STANDARD 99)
 add_executable(jui_sandbox
         src/main.c)
 
-target_link_libraries(jui_sandbox PRIVATE common_platform_config jui tak SDL3::SDL3)
+target_link_libraries(jui_sandbox PRIVATE common_platform_config core jui SDL3::SDL3)

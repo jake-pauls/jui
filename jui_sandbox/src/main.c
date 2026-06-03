@@ -52,15 +52,18 @@ int main()
     SDL_RenderClear(Renderer);
 
     // Render jui
+    if (jui_begin("Window One", 255, 255, 128, 128))
     {
-      if (jui_button(1, 0, 0, 64, 48))
+      const char* ButtonOneText = "Button One";
+      if (jui_button(ButtonOneText, 0, 0, 64, 48))
       {
-        printf("First button hit!\n");
+        printf("%s hit!\n", ButtonOneText);
       }
 
-      if (jui_button(2, 0, 64, 64, 48))
+      const char* ButtonTwoText = "Button Two";
+      if (jui_button(ButtonTwoText, 0, 64, 64, 48))
       {
-        printf("Second button hit!\n");
+        printf("%s hit!\n", ButtonTwoText);
       }
     }
 

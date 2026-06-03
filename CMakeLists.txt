@@ -14,7 +14,7 @@ target_compile_definitions(common_platform_config INTERFACE
 
 add_subdirectory(third_party)
 
-add_subdirectory(tak)
+add_subdirectory(core)
 
 add_subdirectory(jui)
 add_subdirectory(jui_sandbox)

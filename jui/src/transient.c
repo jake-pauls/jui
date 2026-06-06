@@ -1,22 +1,39 @@
 #include "jui/transient.h"
 
-#include "core/hash.h"
+#include "jui/hash.h"
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_render.h>
 
 #define DEFAULT_WIDGET_ID (0)
 
+typedef u64 jui_id;
+
 typedef struct jui_state jui_state;
 struct jui_state
 {
   f32 MouseX;
   f32 MouseY;
+  f32 DragOffsetX;
+  f32 DragOffsetY;
+
   bool MouseDown;
   bool MouseUp;
 
-  u64 HotItem;
-  u64 ActiveItem;
+  // TODO(jake): Abstract this into a different data structure (e.g., a list or map with positions per frame).
+  //             I think that having frames be nested (in effect, layouts) is a much more idiomatic approach.
+  //             If we have bespoke frames finitely containing widgets, or, `begin`/`end` calls, we make
+  //             way for frames to be something other than just another bespoke widget. If we just generally
+  //             'layout' every widget and make the frame/window another widget with other widgets laid out
+  //             inside it, the architecture might be much cleaner.
+  struct
+  {
+    f32 FramePositionX;
+    f32 FramePositionY;
+  };
+
+  jui_id HotItem;
+  jui_id ActiveItem;
 };
 
 typedef struct jui_sdl_state jui_sdl_state;
@@ -25,26 +42,28 @@ struct jui_sdl_state
   SDL_Renderer* Renderer;
 };
 
-static jui_state State =
-{
+static jui_state State = {
     .MouseX = 0,
     .MouseY = 0,
+    .DragOffsetX = 0,
+    .DragOffsetY = 0,
     .MouseDown = false,
     .MouseUp = false,
+    .FramePositionX = 0,
+    .FramePositionY = 0,
     .HotItem = DEFAULT_WIDGET_ID,
     .ActiveItem = DEFAULT_WIDGET_ID,
 };
 
-static jui_sdl_state SDLState =
-{
-  .Renderer = NULL,
+static jui_sdl_state SDLState = {
+    .Renderer = NULL,
 };
 
 /* Platform (SDL) */
 
 void jui_sdl_consume_event(const SDL_Event* Event)
 {
-  // Reset the mouse up state every time an event is consumed
+  // Reset the mouse up state every time an event is consumed.
   State.MouseUp = false;
 
   switch (Event->type)
@@ -80,10 +99,7 @@ void jui_sdl_init(SDL_Renderer* Renderer)
   SDLState.Renderer = Renderer;
 }
 
-void jui_sdl_draw_rect(SDL_Renderer* Renderer,
-  const f32 X, const f32 Y,
-  const f32 W, const f32 H,
-  const u8 R, const u8 G, const u8 B, const u8 A)
+void jui_sdl_draw_rect(SDL_Renderer* Renderer, const f32 X, const f32 Y, const f32 W, const f32 H, const u8 R, const u8 G, const u8 B, const u8 A)
 {
   SDL_FRect Rect;
   Rect.x = X;
@@ -94,9 +110,7 @@ void jui_sdl_draw_rect(SDL_Renderer* Renderer,
   SDL_RenderFillRect(Renderer, &Rect);
 }
 
-void jui_sdl_draw_frame(SDL_Renderer* Renderer, const u64 Id,
-  const f32 X, const f32 Y,
-  const f32 W, const f32 H)
+void jui_sdl_draw_frame(SDL_Renderer* Renderer, const jui_id Id, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   if (State.ActiveItem == Id)
   {
@@ -115,9 +129,7 @@ void jui_sdl_draw_frame(SDL_Renderer* Renderer, const u64 Id,
   }
 }
 
-void jui_sdl_draw_button(SDL_Renderer* Renderer, const u64 Id,
-  const f32 X, const f32 Y,
-  const f32 W, const f32 H)
+void jui_sdl_draw_button(SDL_Renderer* Renderer, const jui_id Id, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   if (State.ActiveItem == Id)
   {
@@ -154,14 +166,42 @@ bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
   return true;
 }
 
-bool jui_begin(const char* Name, const f32 X, const f32 Y, const f32 W, const f32 H)
+bool jui_begin(const char* Name, const f32 W, const f32 H)
 {
   // TODO(jake): Push this ID onto the frame stack.
-  const u64 Id = core_hash_djb2((uchar*)Name);
+  const jui_id Id = core_hash_djb2((uchar*)Name);
+
+  if (State.ActiveItem == Id && State.HotItem == Id)
+  {
+    if (State.MouseUp)
+    {
+      State.ActiveItem = DEFAULT_WIDGET_ID;
+    }
+    else
+    {
+      State.FramePositionX = State.MouseX - State.DragOffsetX;
+      State.FramePositionY = State.MouseY - State.DragOffsetY;
+      jui_sdl_draw_frame(SDLState.Renderer, Id, State.FramePositionX, State.FramePositionY, W, H);
+      return true;
+    }
+  }
+  else if (State.HotItem == Id)
+  {
+    if (State.MouseDown)
+    {
+      State.ActiveItem = Id;
+
+      // When we start dragging "pin" the point where the drag started.
+      // This allows us to calculate the delta between the mouse position and
+      // the top left corner of the frame's rect without them going out of sync.
+      State.DragOffsetX = State.MouseX - State.FramePositionX;
+      State.DragOffsetY = State.MouseY - State.FramePositionY;
+    }
+  }
 
   // Only set an item as hot if we pass the hit test and do not have a currently active item.
   // Useful for preventing a click event on another widget if the user clicks and drags off the button.
-  if (jui_hit_test(X, Y, W, H))
+  if (jui_hit_test(State.FramePositionX, State.FramePositionY, W, H))
   {
     if (State.ActiveItem == DEFAULT_WIDGET_ID)
     {
@@ -175,7 +215,7 @@ bool jui_begin(const char* Name, const f32 X, const f32 Y, const f32 W, const f3
   }
 
   // TODO(jake): Make a clearer division between the renderer and the GUI
-  jui_sdl_draw_frame(SDLState.Renderer, Id, X, Y, W, H);
+  jui_sdl_draw_frame(SDLState.Renderer, Id, State.FramePositionX, State.FramePositionY, W, H);
 
   return true;
 }
@@ -190,7 +230,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   bool Result = false;
 
   // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
-  const u64 Id = core_hash_djb2((uchar*)Text);
+  const jui_id Id = core_hash_djb2((uchar*)Text);
 
   if (State.ActiveItem == Id)
   {
@@ -231,4 +271,3 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
 
   return Result;
 }
-

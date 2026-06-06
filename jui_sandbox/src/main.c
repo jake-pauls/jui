@@ -1,5 +1,5 @@
-#include <jui/jui.h>
 #include <SDL3/SDL.h>
+#include <jui/jui.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -52,7 +52,7 @@ int main()
     SDL_RenderClear(Renderer);
 
     // Render jui
-    if (jui_begin("Window One", 255, 255, 128, 128))
+    if (jui_begin("Window One", 128, 128))
     {
       const char* ButtonOneText = "Button One";
       if (jui_button(ButtonOneText, 0, 0, 64, 48))
@@ -66,6 +66,7 @@ int main()
         printf("%s hit!\n", ButtonTwoText);
       }
     }
+    jui_end();
 
     SDL_RenderPresent(Renderer);
   }

@@ -1,6 +1,6 @@
 #include "jui/hash.h"
 
-u64 core_hash_djb2(const uchar* Str)
+u64 hash_djb2(const uchar* Str)
 {
   u64 Hash = 5381;
   i32 C;

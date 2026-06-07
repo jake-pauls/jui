@@ -4,8 +4,10 @@
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_render.h>
+#include <assert.h>
 
 #define DEFAULT_WIDGET_ID (0)
+#define UNINITIALIZED_FRAME_POSITION (-1)
 
 typedef u64 jui_id;
 
@@ -49,8 +51,8 @@ static jui_state State = {
     .DragOffsetY = 0,
     .MouseDown = false,
     .MouseUp = false,
-    .FramePositionX = 0,
-    .FramePositionY = 0,
+    .FramePositionX = UNINITIALIZED_FRAME_POSITION,
+    .FramePositionY = UNINITIALIZED_FRAME_POSITION,
     .HotItem = DEFAULT_WIDGET_ID,
     .ActiveItem = DEFAULT_WIDGET_ID,
 };
@@ -168,8 +170,12 @@ bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
 
 bool jui_begin(const char* Name, const f32 W, const f32 H)
 {
+  // TODO(jake): Remove this when we figure out layouting.
+  State.FramePositionX = State.FramePositionX == UNINITIALIZED_FRAME_POSITION ? 0 : State.FramePositionX;
+  State.FramePositionY = State.FramePositionY == UNINITIALIZED_FRAME_POSITION ? 0 : State.FramePositionY;
+
   // TODO(jake): Push this ID onto the frame stack.
-  const jui_id Id = core_hash_djb2((uchar*)Name);
+  const jui_id Id = hash_djb2((uchar*)Name);
 
   if (State.ActiveItem == Id && State.HotItem == Id)
   {
@@ -230,7 +236,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   bool Result = false;
 
   // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
-  const jui_id Id = core_hash_djb2((uchar*)Text);
+  const jui_id Id = hash_djb2((uchar*)Text);
 
   if (State.ActiveItem == Id)
   {
@@ -251,9 +257,15 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
     }
   }
 
+  // TODO(jake): Need to figure out layouting. Right now it just depends on a single frame.
+  //             Once we have a layout/position pass in we can also ensure this doesn't exceed the container.
+  assert(State.FramePositionX != UNINITIALIZED_FRAME_POSITION && State.FramePositionY != UNINITIALIZED_FRAME_POSITION);
+  const f32 ButtonPositionX = State.FramePositionX + X;
+  const f32 ButtonPositionY = State.FramePositionY + Y;
+
   // Only set an item as hot if we pass the hit test and do not have a currently active item.
   // Useful for preventing a click event on another widget if the user clicks and drags off the button.
-  if (jui_hit_test(X, Y, W, H))
+  if (jui_hit_test(ButtonPositionX, ButtonPositionY, W, H))
   {
     if (State.ActiveItem == DEFAULT_WIDGET_ID)
     {
@@ -267,7 +279,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   }
 
   // TODO(jake): Make a clearer division between the renderer and the GUI
-  jui_sdl_draw_button(SDLState.Renderer, Id, X, Y, W, H);
+  jui_sdl_draw_button(SDLState.Renderer, Id, ButtonPositionX, ButtonPositionY, W, H);
 
   return Result;
 }

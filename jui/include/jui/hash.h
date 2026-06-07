@@ -1,9 +1,9 @@
 #pragma once
 
-#include "types.h"
+#include "jui/types.h"
 
 /// \brief djb2 hash function for strings. The hash function itself has
-///        clever properties that make it suitable for hashing:
+///        clever properties that make it well-suited for hashing strings:
 ///
 /// 1. Use of <c>unsigned char</c> ensures that incoming bytes are guaranteed to
 ///    be in the range 0 <= C <= 255.
@@ -14,4 +14,4 @@
 ///
 /// \param Str Input string to hash.
 /// \remark <a href="http://www.csegyorku.ca/~oz/hash.html">Reference</a>
-u64 core_hash_djb2(const uchar* Str);
+u64 hash_djb2(const uchar* Str);

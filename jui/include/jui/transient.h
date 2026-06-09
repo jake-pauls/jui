@@ -17,6 +17,9 @@ void jui_sdl_init(SDL_Renderer* Renderer);
 
 /* API */
 
-bool jui_begin(const char* Name, f32 W, f32 H);
+void jui_update();
+void jui_render();
+
+void jui_begin(const char* Name, f32 W, f32 H);
 void jui_end();
 bool jui_button(const char* Text, f32 X, f32 Y, f32 W, f32 H);

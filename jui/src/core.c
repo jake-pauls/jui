@@ -1,4 +1,4 @@
-#include "jui/hash.h"
+#include "jui/core.h"
 
 u64 hash_djb2(const uchar* Str)
 {

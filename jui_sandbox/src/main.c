@@ -52,18 +52,21 @@ int main()
     SDL_RenderClear(Renderer);
 
     // Render jui
-    jui_begin("Window One", 128, 128);
+    if (jui_begin("Window One", 128, 128))
     {
       const char* ButtonOneText = "Button One";
       if (jui_button(ButtonOneText, 0, 0, 64, 48))
       {
         printf("%s hit!\n", ButtonOneText);
       }
+
+      const char* ButtonTwoText = "Button Two";
+      if (jui_button(ButtonTwoText, 0, 64, 64, 48))
+      {
+        printf("%s hit!\n", ButtonTwoText);
+      }
     }
     jui_end();
-
-    jui_update();
-    jui_render();
 
     SDL_RenderPresent(Renderer);
   }

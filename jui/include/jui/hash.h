@@ -2,20 +2,6 @@
 
 #include "jui/types.h"
 
-typedef struct widget_node widget_node;
-struct widget_node
-{
-  jui_id Id;
-  f32 X, Y, W, H;
-};
-
-typedef struct widget_tree widget_tree;
-struct widget_tree
-{
-  widget_node FirstNode;
-  widget_node SecondNode;
-};
-
 /// \brief djb2 hash function for strings. The hash function itself has
 ///        clever properties that make it well-suited for hashing strings:
 ///

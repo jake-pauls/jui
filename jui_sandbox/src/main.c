@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+// Temporary counters as a neuron activating sample for clicking a button.
+static i32 ButtonOneCount = 0;
+static i32 ButtonTwoCount = 0;
+
 int main()
 {
   if (!SDL_Init(SDL_INIT_VIDEO))
@@ -52,18 +56,22 @@ int main()
     SDL_RenderClear(Renderer);
 
     // Render jui
-    if (jui_begin("Window One", 128, 128))
+    if (jui_begin("Window", 156, 128))
     {
-      const char* ButtonOneText = "Button One";
-      if (jui_button(ButtonOneText, 0, 0, 64, 48))
+      const char* LabelText = "Label";
+      jui_label(LabelText, 10, 20);
+
+      char Buffer[15];
+      snprintf(Buffer, sizeof(Buffer), "One: %d", ButtonOneCount);
+      if (jui_button(Buffer, 10, 35, 90, 32))
       {
-        printf("%s hit!\n", ButtonOneText);
+        ButtonOneCount++;
       }
 
-      const char* ButtonTwoText = "Button Two";
-      if (jui_button(ButtonTwoText, 0, 64, 64, 48))
+      snprintf(Buffer, sizeof(Buffer), "Two: %d", ButtonTwoCount);
+      if (jui_button(Buffer, 10, 72, 90, 48))
       {
-        printf("%s hit!\n", ButtonTwoText);
+        ButtonTwoCount++;
       }
     }
     jui_end();

@@ -1,6 +1,6 @@
 #include "jui/transient.h"
 
-#include "jui/hash.h"
+#include "jui/core.h"
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_render.h>
@@ -8,8 +8,6 @@
 
 #define DEFAULT_WIDGET_ID (0)
 #define UNINITIALIZED_FRAME_POSITION (-1)
-
-typedef u64 jui_id;
 
 typedef struct jui_state jui_state;
 struct jui_state
@@ -20,7 +18,8 @@ struct jui_state
   f32 DragOffsetY;
 
   bool MouseDown;
-  bool MouseUp;
+  bool MousePressed;
+  bool MouseReleased;
 
   // TODO(jake): Abstract this into a different data structure (e.g., a list or map with positions per frame).
   //             I think that having frames be nested (in effect, layouts) is a much more idiomatic approach.
@@ -50,7 +49,8 @@ static jui_state State = {
     .DragOffsetX = 0,
     .DragOffsetY = 0,
     .MouseDown = false,
-    .MouseUp = false,
+    .MousePressed = false,
+    .MouseReleased = false,
     .FramePositionX = UNINITIALIZED_FRAME_POSITION,
     .FramePositionY = UNINITIALIZED_FRAME_POSITION,
     .HotItem = DEFAULT_WIDGET_ID,
@@ -65,8 +65,9 @@ static jui_sdl_state SDLState = {
 
 void jui_sdl_consume_event(const SDL_Event* Event)
 {
-  // Reset the mouse up state every time an event is consumed.
-  State.MouseUp = false;
+  // Reset the mouse pressed/released state every time an event is consumed.
+  State.MousePressed = false;
+  State.MouseReleased = false;
 
   switch (Event->type)
   {
@@ -78,6 +79,7 @@ void jui_sdl_consume_event(const SDL_Event* Event)
     if (Event->button.button == SDL_BUTTON_LEFT)
     {
       State.MouseDown = true;
+      State.MousePressed = true;
     }
     break;
   case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -85,7 +87,7 @@ void jui_sdl_consume_event(const SDL_Event* Event)
     {
       if (State.MouseDown)
       {
-        State.MouseUp = true;
+        State.MouseReleased = true;
       }
       State.MouseDown = false;
     }
@@ -161,11 +163,31 @@ void jui_sdl_draw_button(SDL_Renderer* Renderer, const jui_id Id, const f32 X, c
 /// \returns <c>true</c> if the hit test passed for the global state, otherwise <c>false</c>.
 bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
 {
-  if (State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H)
+  return !(State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H);
+}
+
+/// \brief Performs a hit test and updates the internal state depending on the result.
+/// \param Id The unique identifier of the widget that the hit is being tested against.
+/// \param X The x coordinate used for the hit test.
+/// \param Y The y coordinate used for the hit test.
+/// \param W The width used for the hit test.
+/// \param H The height used for the hit test.
+bool jui_perform_hit_test(const jui_id Id, const f32 X, const f32 Y, const f32 W, const f32 H)
+{
+  // Only set an item as hot if we pass the hit test and do not have a currently active item.
+  // Useful for preventing a click event on another widget if the user clicks and drags off the button.
+  if (jui_hit_test(X, Y, W, H))
   {
-    return false;
+    State.HotItem = Id;
+    return true;
   }
-  return true;
+  // If we fail the hit test and the current item is hot, reset it.
+  else if (State.HotItem == Id)
+  {
+    State.HotItem = DEFAULT_WIDGET_ID;
+  }
+
+  return false;
 }
 
 bool jui_begin(const char* Name, const f32 W, const f32 H)
@@ -177,9 +199,23 @@ bool jui_begin(const char* Name, const f32 W, const f32 H)
   // TODO(jake): Push this ID onto the frame stack.
   const jui_id Id = hash_djb2((uchar*)Name);
 
+  jui_perform_hit_test(Id, State.FramePositionX, State.FramePositionY, W, H);
+
+  if (State.HotItem == Id && State.MousePressed)
+  {
+    State.ActiveItem = Id;
+
+    // When we start dragging "pin" the point where the drag started.
+    // This allows us to calculate the delta between the mouse position and
+    // the top left corner of the frame's rect without them going out of sync.
+    State.DragOffsetX = State.MouseX - State.FramePositionX;
+    State.DragOffsetY = State.MouseY - State.FramePositionY;
+  }
+
   if (State.ActiveItem == Id && State.HotItem == Id)
   {
-    if (State.MouseUp)
+    // Update the position of the frame by dragging it around until the mouse is released.
+    if (State.MouseReleased)
     {
       State.ActiveItem = DEFAULT_WIDGET_ID;
     }
@@ -187,40 +223,9 @@ bool jui_begin(const char* Name, const f32 W, const f32 H)
     {
       State.FramePositionX = State.MouseX - State.DragOffsetX;
       State.FramePositionY = State.MouseY - State.DragOffsetY;
-      jui_sdl_draw_frame(SDLState.Renderer, Id, State.FramePositionX, State.FramePositionY, W, H);
-      return true;
-    }
-  }
-  else if (State.HotItem == Id)
-  {
-    if (State.MouseDown)
-    {
-      State.ActiveItem = Id;
-
-      // When we start dragging "pin" the point where the drag started.
-      // This allows us to calculate the delta between the mouse position and
-      // the top left corner of the frame's rect without them going out of sync.
-      State.DragOffsetX = State.MouseX - State.FramePositionX;
-      State.DragOffsetY = State.MouseY - State.FramePositionY;
     }
   }
 
-  // Only set an item as hot if we pass the hit test and do not have a currently active item.
-  // Useful for preventing a click event on another widget if the user clicks and drags off the button.
-  if (jui_hit_test(State.FramePositionX, State.FramePositionY, W, H))
-  {
-    if (State.ActiveItem == DEFAULT_WIDGET_ID)
-    {
-      State.HotItem = Id;
-    }
-  }
-  // If we fail the hit test and the current item is hot, reset it.
-  else if (State.HotItem == Id)
-  {
-    State.HotItem = DEFAULT_WIDGET_ID;
-  }
-
-  // TODO(jake): Make a clearer division between the renderer and the GUI
   jui_sdl_draw_frame(SDLState.Renderer, Id, State.FramePositionX, State.FramePositionY, W, H);
 
   return true;
@@ -238,47 +243,38 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
   const jui_id Id = hash_djb2((uchar*)Text);
 
-  if (State.ActiveItem == Id)
-  {
-    if (State.MouseUp)
-    {
-      if (State.HotItem == Id)
-      {
-        Result = true;
-      }
-      State.ActiveItem = DEFAULT_WIDGET_ID;
-    }
-  }
-  else if (State.HotItem == Id)
-  {
-    if (State.MouseDown)
-    {
-      State.ActiveItem = Id;
-    }
-  }
-
   // TODO(jake): Need to figure out layouting. Right now it just depends on a single frame.
   //             Once we have a layout/position pass in we can also ensure this doesn't exceed the container.
   assert(State.FramePositionX != UNINITIALIZED_FRAME_POSITION && State.FramePositionY != UNINITIALIZED_FRAME_POSITION);
   const f32 ButtonPositionX = State.FramePositionX + X;
   const f32 ButtonPositionY = State.FramePositionY + Y;
 
-  // Only set an item as hot if we pass the hit test and do not have a currently active item.
-  // Useful for preventing a click event on another widget if the user clicks and drags off the button.
-  if (jui_hit_test(ButtonPositionX, ButtonPositionY, W, H))
+  jui_perform_hit_test(Id, ButtonPositionX, ButtonPositionY, W, H);
+
+  // The button is in it's "active" state when it's hot and the mouse is down.
+  if (State.HotItem == Id && State.MousePressed)
   {
-    if (State.ActiveItem == DEFAULT_WIDGET_ID)
-    {
-      State.HotItem = Id;
-    }
-  }
-  // If we fail the hit test and the current item is hot, reset it.
-  else if (State.HotItem == Id)
-  {
-    State.HotItem = DEFAULT_WIDGET_ID;
+    State.ActiveItem = Id;
   }
 
-  // TODO(jake): Make a clearer division between the renderer and the GUI
+  // The button is pressed when it's active, hot, and the mouse is released this frame.
+  // This is a "completed" interaction, so reset the active item as well.
+  if (State.ActiveItem == Id && State.HotItem == Id && State.MouseReleased)
+  {
+    Result = true;
+    State.ActiveItem = DEFAULT_WIDGET_ID;
+  }
+  // The hot item does not match the active item, and the active item this widget. This is
+  // equivalent to the mouse leaving an active item mid-interaction (e.g., the mouse leaving
+  // the button mid-press) and is often treated as a "cancellation" of the user's interaction.
+  //
+  // Most widgets will require some check like this. The clickable area for a draggable component
+  // is one exemption because the mouse 'locks' while you're dragging it, not requiring a cancel.
+  else if (State.HotItem != Id && State.ActiveItem == Id && State.MouseReleased)
+  {
+    State.ActiveItem = DEFAULT_WIDGET_ID;
+  }
+
   jui_sdl_draw_button(SDLState.Renderer, Id, ButtonPositionX, ButtonPositionY, W, H);
 
   return Result;

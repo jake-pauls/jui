@@ -16,3 +16,7 @@ typedef unsigned char uchar;
 
 typedef float f32;
 typedef double f64;
+
+/* Internal Types */
+
+typedef u64 jui_id;

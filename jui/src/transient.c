@@ -6,6 +6,7 @@
 #include <SDL3/SDL_render.h>
 #include <assert.h>
 
+#define MAXIMUM_WINDOW_COUNT (2)
 #define DEFAULT_WIDGET_ID (0)
 #define UNINITIALIZED_FRAME_POSITION (-1)
 
@@ -27,11 +28,8 @@ struct jui_state
   //             way for frames to be something other than just another bespoke widget. If we just generally
   //             'layout' every widget and make the frame/window another widget with other widgets laid out
   //             inside it, the architecture might be much cleaner.
-  struct
-  {
-    f32 FramePositionX;
-    f32 FramePositionY;
-  };
+  jui_id CurrentWindowId;
+  jui_window Windows[MAXIMUM_WINDOW_COUNT];
 
   jui_id HotItem;
   jui_id ActiveItem;
@@ -51,8 +49,9 @@ static jui_state State = {
     .MouseDown = false,
     .MousePressed = false,
     .MouseReleased = false,
-    .FramePositionX = UNINITIALIZED_FRAME_POSITION,
-    .FramePositionY = UNINITIALIZED_FRAME_POSITION,
+    .CurrentWindowId = DEFAULT_WIDGET_ID,
+    // TODO(jake): Find a way to "semi-dynamically" add windows
+    .Windows = {{.Id = DEFAULT_WIDGET_ID, .X = UNINITIALIZED_FRAME_POSITION, .Y = UNINITIALIZED_FRAME_POSITION}, {.Id = DEFAULT_WIDGET_ID, .X = UNINITIALIZED_FRAME_POSITION, .Y = UNINITIALIZED_FRAME_POSITION}},
     .HotItem = DEFAULT_WIDGET_ID,
     .ActiveItem = DEFAULT_WIDGET_ID,
 };
@@ -176,7 +175,7 @@ void jui_sdl_draw_button(SDL_Renderer* Renderer, const jui_id Id, const char* Te
 /// \param Y The y coordinate used for the hit test.
 /// \param W The width used for the hit test.
 /// \param H The height used for the hit test.
-/// \returns `true` if the hit test passed for the global state, otherwise `false`.
+/// \returns <c>true</c> if the hit test passed for the global state, otherwise <c>false</c>.
 bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   return !(State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H);
@@ -207,29 +206,33 @@ bool jui_perform_hit_test(const jui_id Id, const f32 X, const f32 Y, const f32 W
   return false;
 }
 
-bool jui_begin(const char* Text, const f32 W, const f32 H)
+/* Widgets */
+
+void jui_make_window(jui_window* Window, const char* Text, const f32 W, const f32 H)
 {
   // TODO(jake): Remove this when we figure out layouting.
-  State.FramePositionX = State.FramePositionX == UNINITIALIZED_FRAME_POSITION ? 0 : State.FramePositionX;
-  State.FramePositionY = State.FramePositionY == UNINITIALIZED_FRAME_POSITION ? 0 : State.FramePositionY;
+  Window->X = Window->X == UNINITIALIZED_FRAME_POSITION ? 0 : Window->X;
+  Window->Y = Window->Y == UNINITIALIZED_FRAME_POSITION ? 0 : Window->Y;
 
-  // TODO(jake): Push this ID onto the frame stack.
-  const jui_id Id = hash_djb2((uchar*)Text);
+  Window->Id = hash_djb2((uchar*)Text);
+  State.CurrentWindowId = Window->Id;
 
-  jui_perform_hit_test(Id, State.FramePositionX, State.FramePositionY, W, H);
+  jui_perform_hit_test(Window->Id, Window->X, Window->Y, W, H);
 
-  if (State.HotItem == Id && State.MousePressed)
+  if (State.HotItem == Window->Id && State.MousePressed &&
+      // Ensure that there isn't another active widget.
+      State.ActiveItem == DEFAULT_WIDGET_ID)
   {
-    State.ActiveItem = Id;
+    State.ActiveItem = Window->Id;
 
     // When we start dragging "pin" the point where the drag started.
     // This allows us to calculate the delta between the mouse position and
     // the top left corner of the frame's rect without them going out of sync.
-    State.DragOffsetX = State.MouseX - State.FramePositionX;
-    State.DragOffsetY = State.MouseY - State.FramePositionY;
+    State.DragOffsetX = State.MouseX - Window->X;
+    State.DragOffsetY = State.MouseY - Window->Y;
   }
 
-  if (State.ActiveItem == Id && State.HotItem == Id)
+  if (State.ActiveItem == Window->Id && State.HotItem == Window->Id)
   {
     // Update the position of the frame by dragging it around until the mouse is released.
     if (State.MouseReleased)
@@ -238,36 +241,42 @@ bool jui_begin(const char* Text, const f32 W, const f32 H)
     }
     else
     {
-      State.FramePositionX = State.MouseX - State.DragOffsetX;
-      State.FramePositionY = State.MouseY - State.DragOffsetY;
+      Window->X = State.MouseX - State.DragOffsetX;
+      Window->Y = State.MouseY - State.DragOffsetY;
     }
   }
 
-  const jui_rect Rect = {
-      .X = State.FramePositionX,
-      .Y = State.FramePositionY,
-      .W = W,
-      .H = H,
-  };
-  jui_sdl_draw_frame(SDLState.Renderer, Id, Text, &Rect);
+  const jui_rect Rect = {.X = Window->X, .Y = Window->Y, .W = W, .H = H};
+  jui_sdl_draw_frame(SDLState.Renderer, Window->Id, Text, &Rect);
+}
 
+bool jui_begin(const char* Text, const f32 W, const f32 H, const i8 WindowIndex)
+{
+  if (WindowIndex == 0)
+  {
+    jui_make_window(&State.Windows[0], Text, W, H);
+  }
+  else if (WindowIndex == 1)
+  {
+    jui_make_window(&State.Windows[1], Text, W, H);
+  }
   return true;
 }
 
-void jui_end()
-{
-  // TODO(jake): Pop the frame stack.
-}
+void jui_end() {}
 
 void jui_label(const char* Text, const f32 X, const f32 Y)
 {
-  // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
-  const f32 LabelPositionX = State.FramePositionX + X;
-  const f32 LabelPositionY = State.FramePositionY + Y;
+  // TEMP(jake): This should become a lookup into a vector or map once we have dynamic windowing
+  const f32 WindowPositionX = State.CurrentWindowId == State.Windows[0].Id ? State.Windows[0].X : State.Windows[1].X;
+  const f32 WindowPositionY = State.CurrentWindowId == State.Windows[0].Id ? State.Windows[0].Y : State.Windows[1].Y;
+
+  const f32 LabelPositionX = WindowPositionX + X;
+  const f32 LabelPositionY = WindowPositionY + Y;
+
   jui_sdl_draw_text(SDLState.Renderer, Text, LabelPositionX, LabelPositionY);
 }
 
-#include <stdio.h>
 bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   bool Result = false;
@@ -275,16 +284,26 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   // TODO(jake): Add a scope for this ID (e.g., a window/frame or a scope manually defined by the user).
   const jui_id Id = hash_djb2((uchar*)Text);
 
+  // TEMP(jake): This should become a lookup into a vector or map once we have dynamic windowing
+  const f32 WindowPositionX = State.CurrentWindowId == State.Windows[0].Id ? State.Windows[0].X : State.Windows[1].X;
+  const f32 WindowPositionY = State.CurrentWindowId == State.Windows[0].Id ? State.Windows[0].Y : State.Windows[1].Y;
+
   // TODO(jake): Need to figure out layouting. Right now it just depends on a single frame.
   //             Once we have a layout/position pass in we can also ensure this doesn't exceed the container.
-  assert(State.FramePositionX != UNINITIALIZED_FRAME_POSITION && State.FramePositionY != UNINITIALIZED_FRAME_POSITION);
-  const f32 ButtonPositionX = State.FramePositionX + X;
-  const f32 ButtonPositionY = State.FramePositionY + Y;
+  assert(WindowPositionX != UNINITIALIZED_FRAME_POSITION && WindowPositionY != UNINITIALIZED_FRAME_POSITION);
+  const f32 ButtonPositionX = WindowPositionX + X;
+  const f32 ButtonPositionY = WindowPositionY + Y;
 
   jui_perform_hit_test(Id, ButtonPositionX, ButtonPositionY, W, H);
 
   // The button is in it's "active" state when it's hot and the mouse is down.
-  if (State.HotItem == Id && State.MouseDown)
+  if (State.HotItem == Id && State.MouseDown &&
+      // Ensure that there isn't another active widget.
+      (State.ActiveItem == DEFAULT_WIDGET_ID
+        // HACK(jake): ...unless the active widget is the current window. This is a hack because
+        //             the framework doesn't have proper z-indexing yet. Theoretically any two
+        //             widgets that hit test may trigger this prior to a proper z-index being considered, I think.
+        || State.ActiveItem == State.CurrentWindowId))
   {
     State.ActiveItem = Id;
   }
@@ -307,12 +326,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
     State.ActiveItem = DEFAULT_WIDGET_ID;
   }
 
-  const jui_rect Rect = {
-      .X = ButtonPositionX,
-      .Y = ButtonPositionY,
-      .W = W,
-      .H = H,
-  };
+  const jui_rect Rect = {.X = ButtonPositionX, .Y = ButtonPositionY, .W = W, .H = H};
   jui_sdl_draw_button(SDLState.Renderer, Id, Text, &Rect);
 
   return Result;

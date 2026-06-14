@@ -55,8 +55,8 @@ int main()
     SDL_SetRenderDrawColor(Renderer, 25, 25, 25, 255);
     SDL_RenderClear(Renderer);
 
-    // Render jui
-    if (jui_begin("Window", 156, 128))
+    // First window
+    if (jui_begin("Window One", 156, 128, 0))
     {
       const char* LabelText = "Label";
       jui_label(LabelText, 10, 20);
@@ -72,6 +72,19 @@ int main()
       if (jui_button(Buffer, 10, 72, 90, 48))
       {
         ButtonTwoCount++;
+      }
+    }
+    jui_end();
+
+    // Second window
+    if (jui_begin("Window Two", 128, 128, 1))
+    {
+      const char* LabelText = "Some label";
+      jui_label(LabelText, 10, 20);
+
+      if (jui_button("Test", 10, 40, 55, 45))
+      {
+        printf("Hit the button in the second window!\n");
       }
     }
     jui_end();

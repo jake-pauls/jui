@@ -7,6 +7,10 @@
 typedef union SDL_Event SDL_Event;
 typedef struct SDL_Renderer SDL_Renderer;
 
+/* Lifecycle (General) */
+
+void jui_init();
+
 /* Platform (SDL) */
 
 void jui_sdl_consume_event(const SDL_Event* Event);
@@ -15,9 +19,10 @@ void jui_sdl_consume_event(const SDL_Event* Event);
 
 void jui_sdl_init(SDL_Renderer* Renderer);
 
-/* API */
+/* Widgets */
 
-bool jui_begin(const char* Text, f32 W, f32 H);
+// TEMP(jake): Remove WindowIndex when dynamic windowing is implemented 
+bool jui_begin(const char* Text, f32 W, f32 H, i8 WindowIndex);
 void jui_end();
 void jui_label(const char* Text, f32 X, f32 Y);
 bool jui_button(const char* Text, f32 X, f32 Y, f32 W, f32 H);

@@ -9,7 +9,8 @@ typedef struct SDL_Renderer SDL_Renderer;
 
 /* Lifecycle (General) */
 
-void jui_init();
+void jui_start_frame();
+void jui_render();
 
 /* Platform (SDL) */
 

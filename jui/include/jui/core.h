@@ -2,22 +2,6 @@
 
 #include "jui/types.h"
 
-/* UI Structures */
-
-/// \brief Represents a rectangle using floating point values. 
-typedef struct jui_rect jui_rect;
-struct jui_rect
-{
-  f32 X, Y, W, H;
-};
-
-typedef struct jui_window jui_window;
-struct jui_window
-{
-  jui_id Id;
-  f32 X, Y;
-};
-
 /* Hashing */
 
 /// \brief djb2 hash function for strings. The hash function itself has

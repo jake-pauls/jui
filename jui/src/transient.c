@@ -8,8 +8,10 @@
 #include <assert.h>
 
 #define MAXIMUM_WINDOW_COUNT (3)
-#define MAXIMUM_DRAW_LIST_SIZE_PER_FRAME (100)
-#define MAXIMUM_FRAME_ARENA_SIZE_BYTES (1024)
+#define MAXIMUM_DRAW_LIST_SIZE_PER_FRAME (50)
+// TODO(jake): Implement byte helpers - (~8kB each)
+#define MAXIMUM_FRAME_ARENA_SIZE_BYTES (8192)
+#define MAXIMUM_APP_ARENA_SIZE_BYTES (8192)
 
 #define DEFAULT_WIDGET_ID (0)
 #define UNINITIALIZED_FRAME_POSITION (-1)
@@ -23,6 +25,7 @@ typedef struct sdl_draw_text_params sdl_draw_text_params;
 
 typedef struct jui_rect jui_rect;
 typedef struct jui_window jui_window;
+typedef struct jui_window_list jui_window_list;
 
 typedef struct jui_state jui_state;
 typedef struct jui_sdl_state jui_sdl_state;
@@ -63,7 +66,13 @@ struct jui_window
 {
   jui_id Id;
   f32 X, Y;
-  jui_draw_list DrawList;
+  jui_draw_list* DrawList;
+};
+
+struct jui_window_list
+{
+  jui_window* Windows[MAXIMUM_WINDOW_COUNT];
+  u32 Count;
 };
 
 /* State */
@@ -79,6 +88,7 @@ struct jui_state
   bool MousePressed;
   bool MouseReleased;
 
+  arena AppArena;
   arena FrameArena;
 
   // TODO(jake): Abstract this into a different data structure (e.g., a list or map with positions per frame).
@@ -91,7 +101,7 @@ struct jui_state
   // TODO(jake): Likely this WindowId just look at another data structure (e.g., a stack) - or just maintain a pointer
   //             to the current window in the state directly.
   jui_window* CurrentWindow;
-  jui_window Windows[MAXIMUM_WINDOW_COUNT];
+  jui_window_list WindowList;
 
   jui_id HotItem;
   jui_id ActiveItem;
@@ -110,48 +120,21 @@ static jui_state State = {
     .MouseDown = false,
     .MousePressed = false,
     .MouseReleased = false,
+    .AppArena =
+        {
+            .Base = NULL,
+            .Position = 0,
+        },
     .FrameArena =
         {
             .Base = NULL,
             .Position = 0,
         },
     .CurrentWindow = NULL,
-    // TODO(jake): Find a way to "semi-dynamically" add windows
-    .Windows =
+    .WindowList =
         {
-            {
-                .Id = DEFAULT_WIDGET_ID,
-                .X = UNINITIALIZED_FRAME_POSITION,
-                .Y = UNINITIALIZED_FRAME_POSITION,
-                .DrawList =
-                    {
-                        .Command = {0},
-                        .Parameters = {0},
-                        .Count = 0,
-                    },
-            },
-            {
-                .Id = DEFAULT_WIDGET_ID,
-                .X = UNINITIALIZED_FRAME_POSITION,
-                .Y = UNINITIALIZED_FRAME_POSITION,
-                .DrawList =
-                    {
-                        .Command = {0},
-                        .Parameters = {0},
-                        .Count = 0,
-                    },
-            },
-            {
-                .Id = DEFAULT_WIDGET_ID,
-                .X = UNINITIALIZED_FRAME_POSITION,
-                .Y = UNINITIALIZED_FRAME_POSITION,
-                .DrawList =
-                    {
-                        .Command = {0},
-                        .Parameters = {0},
-                        .Count = 0,
-                    },
-            },
+            .Windows = {0},
+            .Count = 0,
         },
     .HotItem = DEFAULT_WIDGET_ID,
     .ActiveItem = DEFAULT_WIDGET_ID,
@@ -201,6 +184,7 @@ void jui_sdl_consume_event(const SDL_Event* Event)
 void jui_init()
 {
   // Allocate the frame-by-frame memory arena.
+  arena_alloc(&State.AppArena, MAXIMUM_APP_ARENA_SIZE_BYTES);
   arena_alloc(&State.FrameArena, MAXIMUM_FRAME_ARENA_SIZE_BYTES);
 }
 
@@ -208,23 +192,42 @@ void jui_start_frame()
 {
   // At the start of each frame clear the frame-by-frame memory arena.
   arena_clear(&State.FrameArena);
+
+  // Reset the window draw list for each window.
+  for (size_t WindowIdx = 0; WindowIdx < State.WindowList.Count; ++WindowIdx)
+  {
+    const jui_window* Window = State.WindowList.Windows[WindowIdx];
+    if (Window != NULL)
+    {
+      Window->DrawList->Count = 0;
+    }
+  }
+}
+
+void jui_teardown()
+{
+  arena_clear(&State.AppArena);
+  arena_free(&State.AppArena);
+  arena_clear(&State.FrameArena);
+  arena_free(&State.FrameArena);
 }
 
 void jui_render()
 {
-  for (size_t WindowIdx = 0; WindowIdx < MAXIMUM_WINDOW_COUNT; ++WindowIdx)
+  for (size_t WindowIdx = 0; WindowIdx < State.WindowList.Count; ++WindowIdx)
   {
+    const jui_window* Window = State.WindowList.Windows[WindowIdx];
+    if (!Window)
+      continue;
+
     // Execute each command in the draw list for each window.
-    for (size_t Idx = 0; Idx < State.Windows[WindowIdx].DrawList.Count; ++Idx)
+    for (size_t Idx = 0; Idx < Window->DrawList->Count; ++Idx)
     {
-      jui_draw_list* DrawList = &State.Windows[WindowIdx].DrawList;
-      jui_draw_command_fn Command = DrawList->Command[Idx];
-      void* Parameters = DrawList->Parameters[Idx];
+      const jui_draw_list* DrawList = Window->DrawList;
+      const jui_draw_command_fn Command = DrawList->Command[Idx];
+      const void* Parameters = DrawList->Parameters[Idx];
       Command(Parameters);
     }
-
-    // Reset the window draw list for each window.
-    State.Windows[WindowIdx].DrawList.Count = 0;
   }
 }
 
@@ -272,9 +275,9 @@ void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect* const
   if (State.ActiveItem == Id)
   {
     // Active color (95% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
+    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
+    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
     DrawRect->X = Rect->X;
     DrawRect->Y = Rect->Y;
     DrawRect->W = Rect->W;
@@ -286,16 +289,17 @@ void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect* const
     DrawRectParams->B = 242;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
   else if (State.HotItem == Id)
   {
     // Hot/hover color (90% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
+    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
+    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
     DrawRect->X = Rect->X;
     DrawRect->Y = Rect->Y;
     DrawRect->W = Rect->W;
@@ -307,16 +311,17 @@ void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect* const
     DrawRectParams->B = 229;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
   else
   {
     // Inactive (80% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
+    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
+    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
     DrawRect->X = Rect->X;
     DrawRect->Y = Rect->Y;
     DrawRect->W = Rect->W;
@@ -328,25 +333,27 @@ void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect* const
     DrawRectParams->B = 202;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
 
   // TODO(jake): Proper layouting, right now just add some arbitrary margin around the frame text.
-  sdl_draw_text_params* DrawTextParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_text_params);
+  sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_text_params);
 
   // TODO(jake): Need to make some string abstractions
-  char* AllocatedText = PUSH_ARRAY(&State.FrameArena, char, strlen(Text) + 1);
+  char* AllocatedText = PUSH_ARRAY_ZERO(&State.FrameArena, char, strlen(Text) + 1);
   strcpy(&AllocatedText[0], &Text[0]);
 
   DrawTextParams->Text = AllocatedText;
   DrawTextParams->X = Rect->X + 2;
   DrawTextParams->Y = Rect->Y + 2;
 
-  State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_text;
-  State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawTextParams;
-  State.CurrentWindow->DrawList.Count++;
+  assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+  State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_text;
+  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawTextParams;
+  State.CurrentWindow->DrawList->Count++;
 }
 
 void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* const Rect)
@@ -354,9 +361,9 @@ void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* cons
   if (State.ActiveItem == Id)
   {
     // Active color (green)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
+    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
+    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
     DrawRect->X = Rect->X;
     DrawRect->Y = Rect->Y;
     DrawRect->W = Rect->W;
@@ -368,16 +375,17 @@ void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* cons
     DrawRectParams->B = 0;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
   else if (State.HotItem == Id)
   {
     // Hot/hover color (cyan)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
+    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
+    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
     DrawRect->X = Rect->X;
     DrawRect->Y = Rect->Y;
     DrawRect->W = Rect->W;
@@ -389,9 +397,10 @@ void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* cons
     DrawRectParams->B = 255;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
   else
   {
@@ -410,27 +419,29 @@ void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* cons
     DrawRectParams->B = 255;
     DrawRectParams->A = 255;
 
-    State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawRectParams;
-    State.CurrentWindow->DrawList.Count++;
+    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
+    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
+    State.CurrentWindow->DrawList->Count++;
   }
 
   // TODO(jake): Proper layouting, right now it's just an arbitrary position near the center of the button.
   //             Note that the X coordinate is really all that's needed now because text is anchored on the
   //             top right point of the texture.
-  sdl_draw_text_params* DrawTextParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_text_params);
+  sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_text_params);
 
   // TODO(jake): Need to make some string abstractions
-  char* AllocatedText = PUSH_ARRAY(&State.FrameArena, char, strlen(Text) + 1);
+  char* AllocatedText = PUSH_ARRAY_ZERO(&State.FrameArena, char, strlen(Text) + 1);
   strcpy(&AllocatedText[0], &Text[0]);
 
   DrawTextParams->Text = AllocatedText;
   DrawTextParams->X = Rect->X;
   DrawTextParams->Y = Rect->H / 2.0f + Rect->Y;
 
-  State.CurrentWindow->DrawList.Command[State.CurrentWindow->DrawList.Count] = &sdl_draw_text;
-  State.CurrentWindow->DrawList.Parameters[State.CurrentWindow->DrawList.Count] = DrawTextParams;
-  State.CurrentWindow->DrawList.Count++;
+  assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+  State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_text;
+  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawTextParams;
+  State.CurrentWindow->DrawList->Count++;
 }
 
 /* API */
@@ -472,15 +483,46 @@ bool perform_hit_test(const jui_id Id, const f32 X, const f32 Y, const f32 W, co
   return false;
 }
 
+/// \brief Looks up a window by ID in the current window list.
+/// \param Id The identifier of the window to lookup.
+/// \return Pointer to the window that matches the provided identifier, <c>NULL</c> if no window was found matching the provided identifier.
+jui_window* get_window_by_id(const jui_id Id)
+{
+  if (State.WindowList.Count == 0)
+  {
+    return NULL;
+  }
+
+  for (size_t WindowIdx = 0; WindowIdx < State.WindowList.Count; ++WindowIdx)
+  {
+    jui_window* ExistingWindow = State.WindowList.Windows[WindowIdx];
+    if (ExistingWindow != NULL && ExistingWindow->Id == Id)
+    {
+      return ExistingWindow;
+    }
+  }
+
+  return NULL;
+}
+
 /* Widgets */
 
-void jui_make_window(jui_window* Window, const char* Text, const f32 W, const f32 H)
+bool jui_begin(const char* Text, const f32 W, const f32 H)
 {
-  // TODO(jake): Remove this when we figure out layouting.
-  Window->X = Window->X == UNINITIALIZED_FRAME_POSITION ? 0 : Window->X;
-  Window->Y = Window->Y == UNINITIALIZED_FRAME_POSITION ? 0 : Window->Y;
+  const jui_id Id = hash_djb2((uchar*)Text);
 
-  Window->Id = hash_djb2((uchar*)Text);
+  jui_window* Window = get_window_by_id(Id);
+  if (!Window)
+  {
+    Window = PUSH_STRUCT_ZERO(&State.AppArena, jui_window);
+    jui_draw_list* NewDrawList = PUSH_STRUCT_ZERO(&State.AppArena, jui_draw_list);
+    Window->DrawList = NewDrawList;
+
+    State.WindowList.Windows[State.WindowList.Count] = Window;
+    State.WindowList.Count++;
+  }
+
+  Window->Id = Id;
   State.CurrentWindow = Window;
 
   perform_hit_test(Window->Id, Window->X, Window->Y, W, H);
@@ -514,22 +556,7 @@ void jui_make_window(jui_window* Window, const char* Text, const f32 W, const f3
 
   const jui_rect Rect = {.X = Window->X, .Y = Window->Y, .W = W, .H = H};
   jui_sdl_draw_frame(Window->Id, Text, &Rect);
-}
 
-bool jui_begin(const char* Text, const f32 W, const f32 H, const i8 WindowIndex)
-{
-  if (WindowIndex == 0)
-  {
-    jui_make_window(&State.Windows[0], Text, W, H);
-  }
-  else if (WindowIndex == 1)
-  {
-    jui_make_window(&State.Windows[1], Text, W, H);
-  }
-  else if (WindowIndex == 2)
-  {
-    jui_make_window(&State.Windows[2], Text, W, H);
-  }
   return true;
 }
 
@@ -559,9 +586,6 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   const f32 WindowPositionX = State.CurrentWindow->X;
   const f32 WindowPositionY = State.CurrentWindow->Y;
 
-  // TODO(jake): Need to figure out layouting. Right now it just depends on a single frame.
-  //             Once we have a layout/position pass in we can also ensure this doesn't exceed the container.
-  assert(WindowPositionX != UNINITIALIZED_FRAME_POSITION && WindowPositionY != UNINITIALIZED_FRAME_POSITION);
   const f32 ButtonPositionX = WindowPositionX + X;
   const f32 ButtonPositionY = WindowPositionY + Y;
 

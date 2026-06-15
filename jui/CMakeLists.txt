@@ -6,7 +6,6 @@ set(CMAKE_C_STANDARD 99)
 add_library(jui STATIC
         src/transient.c
         src/core.c
-        include/jui/core_memory.h
         src/core_memory.c)
 
 target_include_directories(jui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

@@ -6,6 +6,7 @@ typedef struct arena arena;
 struct arena
 {
   void* Base;
+  u64 Capacity;
   u64 Position;
 };
 
@@ -23,6 +24,11 @@ void arena_free(arena* Arena);
 /// \param Size The size in bytes to push onto the arena.
 void* arena_push(arena* Arena, u64 Size);
 
+/// \brief Pushes bytes onto the arena, zero-initializing all bytes in the segment.
+/// \param Arena Pointer to the arena to push to.
+/// \param Size The size in bytes to push onto the arena.
+void* arena_push_zero(arena* Arena, u64 Size);
+
 /// \brief Pops a specified size in bytes off of the arena.
 /// \param Arena Pointer to the arena to pop.
 /// \param Size The size in bytes to pop off of the arena.
@@ -33,4 +39,6 @@ void arena_pop(arena* Arena, u64 Size);
 void arena_clear(arena* Arena);
 
 #define PUSH_ARRAY(Arena, Type, Count) ((Type*)arena_push((Arena), sizeof(Type) * Count))
+#define PUSH_ARRAY_ZERO(Arena, Type, Count) ((Type*)arena_push_zero((Arena), sizeof(Type) * Count))
 #define PUSH_STRUCT(Arena, Type) ((Type*)arena_push((Arena), sizeof(Type)))
+#define PUSH_STRUCT_ZERO(Arena, Type) ((Type*)arena_push_zero((Arena), sizeof(Type)))

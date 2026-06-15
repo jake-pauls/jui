@@ -59,7 +59,7 @@ int main()
     jui_start_frame();
 
     // First window
-    if (jui_begin("Window One", 156, 128, 0))
+    if (jui_begin("Window One", 156, 128))
     {
       const char* LabelText = "Label";
       jui_label(LabelText, 10, 20);
@@ -80,7 +80,7 @@ int main()
     jui_end();
 
     // Second window
-    if (jui_begin("Window Two", 128, 128, 1))
+    if (jui_begin("Window Two", 128, 128))
     {
       const char* LabelText = "Some label";
       jui_label(LabelText, 10, 20);
@@ -93,7 +93,7 @@ int main()
     jui_end();
 
     // Third window
-    if (jui_begin("Window Three", 128, 148, 2))
+    if (jui_begin("Window Three", 128, 148))
     {
       const char* LabelText = "Some label";
       jui_label(LabelText, 10, 20);
@@ -110,6 +110,9 @@ int main()
 
     SDL_RenderPresent(Renderer);
   }
+
+  // Teardown jui
+  jui_teardown();
 
   SDL_DestroyRenderer(Renderer);
   SDL_DestroyWindow(Window);

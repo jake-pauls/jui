@@ -2,11 +2,15 @@
 
 #include "jui/types.h"
 
+#include <math.h>
+#include <stdbool.h>
+
 /* Core Structures */
 
-/// \brief Represents a two-float vector. Used to represent arbitrary position vectors.
-//         Use another struct to represent something more meaningful, for example,
-//         for rects refer to \see jui_rect.
+/// \brief Represents the unique identifier for a widget in jui.
+typedef u64 jui_id;
+
+/// \brief Represents a two-float vector. Used to represent arbitrary vectors.
 typedef union jui_v2 jui_v2;
 union jui_v2
 {
@@ -17,6 +21,42 @@ union jui_v2
   };
   f32 V[2];
 };
+
+/// \brief Represents a three-float vector. Used to represent arbitrary vectors.
+typedef union jui_v3 jui_v3;
+union jui_v3
+{
+  struct
+  {
+    f32 X;
+    f32 Y;
+    f32 Z;
+  };
+  f32 V[3];
+};
+
+/// \brief Represents a rectangle using floating point values.
+typedef struct jui_rect jui_rect;
+struct jui_rect
+{
+  f32 X, Y, W, H;
+};
+
+/// \brief Represents a color of four eight-bit unsigned integers.
+typedef struct jui_color jui_color;
+struct jui_color
+{
+  u8 R, G, B, A;
+};
+
+/* Math */
+
+#define JUI_EPSILON 0.00001f
+
+static bool almost_equal(const f32 A, const f32 B, const f32 Epsilon)
+{
+  return fabs(B - A) < Epsilon;
+}
 
 /* Hashing */
 
@@ -31,5 +71,5 @@ union jui_v2
 ///    using a power of two directly).
 ///
 /// \param Str Input string to hash.
-/// \remark <a href="http://www.csegyorku.ca/~oz/hash.html">Reference</a>
+/// \remarks <a href="http://www.csegyorku.ca/~oz/hash.html">Reference</a>
 u64 hash_djb2(const uchar* Str);

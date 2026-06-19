@@ -2,6 +2,22 @@
 
 #include "jui/types.h"
 
+/* Core Structures */
+
+/// \brief Represents a two-float vector. Used to represent arbitrary position vectors.
+//         Use another struct to represent something more meaningful, for example,
+//         for rects refer to \see jui_rect.
+typedef union jui_v2 jui_v2;
+union jui_v2
+{
+  struct
+  {
+    f32 X;
+    f32 Y;
+  };
+  f32 V[2];
+};
+
 /* Hashing */
 
 /// \brief djb2 hash function for strings. The hash function itself has

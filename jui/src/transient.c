@@ -18,38 +18,22 @@
 
 /* Forward Declarations */
 
-typedef void (*jui_draw_command_fn)(const void*);
+typedef enum jui_draw_command_parameters_type jui_draw_command_parameters_type;
+typedef struct jui_draw_command_parameters jui_draw_command_parameters;
+typedef void (*jui_draw_command)(const jui_draw_command_parameters*);
 typedef struct jui_draw_list jui_draw_list;
 typedef struct sdl_draw_rect_params sdl_draw_rect_params;
 typedef struct sdl_draw_text_params sdl_draw_text_params;
 
 typedef struct jui_rect jui_rect;
+typedef struct jui_color jui_color;
 typedef struct jui_window jui_window;
 typedef struct jui_window_list jui_window_list;
 
 typedef struct jui_state jui_state;
 typedef struct jui_sdl_state jui_sdl_state;
 
-/* Rendering */
-
-struct jui_draw_list
-{
-  jui_draw_command_fn Command[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
-  void* Parameters[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
-  u32 Count;
-};
-
-struct sdl_draw_rect_params
-{
-  jui_rect* Rect;
-  u8 R, G, B, A;
-};
-
-struct sdl_draw_text_params
-{
-  const char* Text;
-  f32 X, Y;
-};
+void sdl_draw_impl(const jui_draw_command_parameters* Parameters);
 
 /* UI Structures */
 
@@ -57,6 +41,12 @@ struct sdl_draw_text_params
 struct jui_rect
 {
   f32 X, Y, W, H;
+};
+
+/// \brief Represents a color of four eight-bit unsigned integers.
+struct jui_color
+{
+  u8 R, G, B, A;
 };
 
 /// \brief Represents a window widget in jui. Contains a draw list of command
@@ -73,6 +63,38 @@ struct jui_window_list
 {
   jui_window* Windows[MAXIMUM_WINDOW_COUNT];
   u32 Count;
+};
+
+/* Rendering */
+
+enum jui_draw_command_parameters_type
+{
+  DrawCommandParameters_DrawRect,
+  DrawCommandParameters_DrawText
+};
+
+struct jui_draw_command_parameters
+{
+  void* Data;
+  jui_draw_command_parameters_type Type;
+};
+
+struct jui_draw_list
+{
+  jui_draw_command_parameters* Parameters[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
+  u32 Count;
+};
+
+struct sdl_draw_rect_params
+{
+  jui_rect Rect;
+  jui_color Color;
+};
+
+struct sdl_draw_text_params
+{
+  const char* Text;
+  jui_v2 Position;
 };
 
 /* State */
@@ -197,7 +219,7 @@ void jui_start_frame()
   for (size_t WindowIdx = 0; WindowIdx < State.WindowList.Count; ++WindowIdx)
   {
     const jui_window* Window = State.WindowList.Windows[WindowIdx];
-    if (Window != NULL)
+    if (Window)
     {
       Window->DrawList->Count = 0;
     }
@@ -218,15 +240,16 @@ void jui_render()
   {
     const jui_window* Window = State.WindowList.Windows[WindowIdx];
     if (!Window)
+    {
       continue;
+    }
 
     // Execute each command in the draw list for each window.
     for (size_t Idx = 0; Idx < Window->DrawList->Count; ++Idx)
     {
       const jui_draw_list* DrawList = Window->DrawList;
-      const jui_draw_command_fn Command = DrawList->Command[Idx];
-      const void* Parameters = DrawList->Parameters[Idx];
-      Command(Parameters);
+      const jui_draw_command_parameters* Parameter = DrawList->Parameters[Idx];
+      sdl_draw_impl(Parameter);
     }
   }
 }
@@ -241,207 +264,138 @@ void jui_sdl_init(SDL_Renderer* Renderer)
   jui_init();
 }
 
-void sdl_draw_rect_impl(SDL_Renderer* Renderer, const jui_rect* const Rect, const u8 R, const u8 G, const u8 B, const u8 A)
+void sdl_draw_rect_impl(SDL_Renderer* Renderer, const jui_rect Rect, const jui_color Color)
 {
   SDL_FRect FRect;
-  FRect.x = Rect->X;
-  FRect.y = Rect->Y;
-  FRect.w = Rect->W;
-  FRect.h = Rect->H;
-  SDL_SetRenderDrawColor(Renderer, R, G, B, A);
+  FRect.x = Rect.X;
+  FRect.y = Rect.Y;
+  FRect.w = Rect.W;
+  FRect.h = Rect.H;
+  SDL_SetRenderDrawColor(Renderer, Color.R, Color.G, Color.B, Color.A);
   SDL_RenderFillRect(Renderer, &FRect);
 }
 
-void sdl_draw_rect(const void* Params)
-{
-  const sdl_draw_rect_params* DrawRectParams = Params;
-  sdl_draw_rect_impl(SDLState.Renderer, DrawRectParams->Rect, DrawRectParams->R, DrawRectParams->G, DrawRectParams->B, DrawRectParams->A);
-}
-
-void sdl_draw_text_impl(SDL_Renderer* Renderer, const char* Text, const f32 X, const f32 Y)
+void sdl_draw_text_impl(SDL_Renderer* Renderer, const char* Text, const jui_v2 Position)
 {
   SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
-  SDL_RenderDebugText(Renderer, X, Y, Text);
+  SDL_RenderDebugText(Renderer, Position.X, Position.Y, Text);
 }
 
-void sdl_draw_text(const void* Params)
+void sdl_draw_impl(const jui_draw_command_parameters* Parameters)
 {
-  const sdl_draw_text_params* DrawTextParams = Params;
-  sdl_draw_text_impl(SDLState.Renderer, DrawTextParams->Text, DrawTextParams->X, DrawTextParams->Y);
+  switch (Parameters->Type)
+  {
+  case DrawCommandParameters_DrawRect:
+  {
+    const sdl_draw_rect_params* DrawRectParams = Parameters->Data;
+    sdl_draw_rect_impl(SDLState.Renderer, DrawRectParams->Rect, DrawRectParams->Color);
+    break;
+  }
+  case DrawCommandParameters_DrawText:
+  {
+    const sdl_draw_text_params* DrawTextParams = Parameters->Data;
+    sdl_draw_text_impl(SDLState.Renderer, DrawTextParams->Text, DrawTextParams->Position);
+    break;
+  }
+  }
 }
 
-void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect* const Rect)
+void jui_create_draw_rect_command(const jui_rect Rect, const jui_color Color)
 {
-  if (State.ActiveItem == Id)
-  {
-    // Active color (95% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
+  sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
 
-    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
+  DrawRectParams->Rect.X = Rect.X;
+  DrawRectParams->Rect.Y = Rect.Y;
+  DrawRectParams->Rect.W = Rect.W;
+  DrawRectParams->Rect.H = Rect.H;
 
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 255;
-    DrawRectParams->G = 230;
-    DrawRectParams->B = 242;
-    DrawRectParams->A = 255;
+  DrawRectParams->Color.R = Color.R;
+  DrawRectParams->Color.G = Color.G;
+  DrawRectParams->Color.B = Color.B;
+  DrawRectParams->Color.A = Color.A;
 
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
-  }
-  else if (State.HotItem == Id)
-  {
-    // Hot/hover color (90% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
+  jui_draw_command_parameters* CommandParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_draw_command_parameters);
+  CommandParams->Data = DrawRectParams;
+  CommandParams->Type = DrawCommandParameters_DrawRect;
 
-    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
+  assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
+  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = CommandParams;
+  State.CurrentWindow->DrawList->Count++;
+}
 
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 255;
-    DrawRectParams->G = 204;
-    DrawRectParams->B = 229;
-    DrawRectParams->A = 255;
-
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
-  }
-  else
-  {
-    // Inactive (80% pink)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
-
-    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
-
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 255;
-    DrawRectParams->G = 153;
-    DrawRectParams->B = 202;
-    DrawRectParams->A = 255;
-
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
-  }
-
-  // TODO(jake): Proper layouting, right now just add some arbitrary margin around the frame text.
+void jui_create_draw_text_command(const jui_v2 Position, const char* const Text)
+{
   sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_text_params);
 
-  // TODO(jake): Need to make some string abstractions
+  // TODO(jake): Need to make some string abstractions.
   char* AllocatedText = PUSH_ARRAY_ZERO(&State.FrameArena, char, strlen(Text) + 1);
   strcpy(&AllocatedText[0], &Text[0]);
 
   DrawTextParams->Text = AllocatedText;
-  DrawTextParams->X = Rect->X + 2;
-  DrawTextParams->Y = Rect->Y + 2;
+  DrawTextParams->Position.X = Position.X + 2;
+  DrawTextParams->Position.Y = Position.Y + 2;
+
+  jui_draw_command_parameters* CommandParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_draw_command_parameters);
+  CommandParams->Data = DrawTextParams;
+  CommandParams->Type = DrawCommandParameters_DrawText;
 
   assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-  State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_text;
-  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawTextParams;
+  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = CommandParams;
   State.CurrentWindow->DrawList->Count++;
 }
 
-void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect* const Rect)
+void jui_sdl_draw_frame(const jui_id Id, const char* Text, const jui_rect Rect)
+{
+  if (State.ActiveItem == Id)
+  {
+    // Active color (95% pink)
+    const jui_color Color = {.R = 255, .G = 230, .B = 242, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
+  }
+  else if (State.HotItem == Id)
+  {
+    // Hot/hover color (90% pink)
+    const jui_color Color = {.R = 255, .G = 204, .B = 229, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
+  }
+  else
+  {
+    // Inactive (80% pink)
+    const jui_color Color = {.R = 255, .G = 153, .B = 202, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
+  }
+
+  // TODO(jake): Proper layouting, right now just add some arbitrary margin around the frame text.
+  const jui_v2 TextPosition = {.V = {Rect.X + 2, Rect.Y + 2}};
+  jui_create_draw_text_command(TextPosition, Text);
+}
+
+void jui_sdl_draw_button(const jui_id Id, const char* Text, const jui_rect Rect)
 {
   if (State.ActiveItem == Id)
   {
     // Active color (green)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
-
-    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
-
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 0;
-    DrawRectParams->G = 255;
-    DrawRectParams->B = 0;
-    DrawRectParams->A = 255;
-
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
+    const jui_color Color = {.R = 0, .G = 255, .B = 0, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
   }
   else if (State.HotItem == Id)
   {
     // Hot/hover color (cyan)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_rect_params);
-
-    jui_rect* DrawRect = PUSH_STRUCT_ZERO(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
-
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 0;
-    DrawRectParams->G = 255;
-    DrawRectParams->B = 255;
-    DrawRectParams->A = 255;
-
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
+    const jui_color Color = {.R = 0, .G = 255, .B = 255, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
   }
   else
   {
     // Inactive (blue)
-    sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT(&State.FrameArena, sdl_draw_rect_params);
-
-    jui_rect* DrawRect = PUSH_STRUCT(&State.FrameArena, jui_rect);
-    DrawRect->X = Rect->X;
-    DrawRect->Y = Rect->Y;
-    DrawRect->W = Rect->W;
-    DrawRect->H = Rect->H;
-
-    DrawRectParams->Rect = DrawRect;
-    DrawRectParams->R = 0;
-    DrawRectParams->G = 0;
-    DrawRectParams->B = 255;
-    DrawRectParams->A = 255;
-
-    assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-    State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_rect;
-    State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawRectParams;
-    State.CurrentWindow->DrawList->Count++;
+    const jui_color Color = {.R = 0, .G = 0, .B = 255, .A = 255};
+    jui_create_draw_rect_command(Rect, Color);
   }
 
   // TODO(jake): Proper layouting, right now it's just an arbitrary position near the center of the button.
   //             Note that the X coordinate is really all that's needed now because text is anchored on the
   //             top right point of the texture.
-  sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, sdl_draw_text_params);
-
-  // TODO(jake): Need to make some string abstractions
-  char* AllocatedText = PUSH_ARRAY_ZERO(&State.FrameArena, char, strlen(Text) + 1);
-  strcpy(&AllocatedText[0], &Text[0]);
-
-  DrawTextParams->Text = AllocatedText;
-  DrawTextParams->X = Rect->X;
-  DrawTextParams->Y = Rect->H / 2.0f + Rect->Y;
-
-  assert(State.CurrentWindow->DrawList->Count < MAXIMUM_DRAW_LIST_SIZE_PER_FRAME);
-  State.CurrentWindow->DrawList->Command[State.CurrentWindow->DrawList->Count] = &sdl_draw_text;
-  State.CurrentWindow->DrawList->Parameters[State.CurrentWindow->DrawList->Count] = DrawTextParams;
-  State.CurrentWindow->DrawList->Count++;
+  const jui_v2 TextPosition = {.V = {Rect.X, Rect.H / 2.0f + Rect.Y}};
+  jui_create_draw_text_command(TextPosition, Text);
 }
 
 /* API */
@@ -555,7 +509,7 @@ bool jui_begin(const char* Text, const f32 W, const f32 H)
   }
 
   const jui_rect Rect = {.X = Window->X, .Y = Window->Y, .W = W, .H = H};
-  jui_sdl_draw_frame(Window->Id, Text, &Rect);
+  jui_sdl_draw_frame(Window->Id, Text, Rect);
 
   return true;
 }
@@ -568,10 +522,8 @@ void jui_label(const char* Text, const f32 X, const f32 Y)
   const f32 WindowPositionX = State.CurrentWindow->X;
   const f32 WindowPositionY = State.CurrentWindow->Y;
 
-  const f32 LabelPositionX = WindowPositionX + X;
-  const f32 LabelPositionY = WindowPositionY + Y;
-
-  sdl_draw_text_impl(SDLState.Renderer, Text, LabelPositionX, LabelPositionY);
+  const jui_v2 LabelPosition = {.V = {WindowPositionX + X, WindowPositionY + Y}};
+  sdl_draw_text_impl(SDLState.Renderer, Text, LabelPosition);
 }
 
 bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
@@ -622,7 +574,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   }
 
   const jui_rect Rect = {.X = ButtonPositionX, .Y = ButtonPositionY, .W = W, .H = H};
-  jui_sdl_draw_button(Id, Text, &Rect);
+  jui_sdl_draw_button(Id, Text, Rect);
 
   return Result;
 }

@@ -41,6 +41,9 @@ int main()
   SDL_Event Event;
   while (IsRunning)
   {
+    // Start the frame
+    jui_start_frame();
+
     while (SDL_PollEvent(&Event))
     {
       jui_sdl_consume_event(&Event);
@@ -55,55 +58,51 @@ int main()
     SDL_SetRenderDrawColor(Renderer, 25, 25, 25, 255);
     SDL_RenderClear(Renderer);
 
-    // Start the frame
-    jui_start_frame();
-
     // First window
-    if (jui_begin("Window One", 156, 128))
+    jui_panel("Window One", 156, 128);
     {
       const char* LabelText = "Label";
       jui_label(LabelText, 10, 20);
 
       char Buffer[15];
       snprintf(Buffer, sizeof(Buffer), "One: %d", ButtonOneCount);
-      if (jui_button(Buffer, 10, 35, 90, 32))
+      if (jui_button(Buffer, 10, 35, 135, 32))
       {
+        printf("Button one pressed: %d\n", ButtonOneCount);
         ButtonOneCount++;
       }
 
       snprintf(Buffer, sizeof(Buffer), "Two: %d", ButtonTwoCount);
-      if (jui_button(Buffer, 10, 72, 90, 48))
+      if (jui_button(Buffer, 10, 72, 135, 48))
       {
+        printf("Button two pressed: %d\n", ButtonTwoCount);
         ButtonTwoCount++;
       }
     }
-    jui_end();
 
     // Second window
-    if (jui_begin("Window Two", 128, 128))
-    {
-      const char* LabelText = "Some label";
-      jui_label(LabelText, 10, 20);
-
-      if (jui_button("Two", 10, 40, 55, 45))
-      {
-        printf("Hit the button in the second window!\n");
-      }
-    }
-    jui_end();
+    // if (jui_begin("Window Two", 128, 128))
+    // {
+    //   const char* LabelText = "Some label";
+    //   jui_label(LabelText, 10, 20);
+    //   if (jui_button("Two", 10, 40, 55, 45))
+    //   {
+    //     printf("Hit the button in the second window!\n");
+    //   }
+    // }
+    // jui_end();
 
     // Third window
-    if (jui_begin("Window Three", 128, 148))
-    {
-      const char* LabelText = "Some label";
-      jui_label(LabelText, 10, 20);
-
-      if (jui_button("Three", 10, 40, 55, 45))
-      {
-        printf("Hit the button in the third window!\n");
-      }
-    }
-    jui_end();
+    // if (jui_begin("Window Three", 128, 148))
+    // {
+    //   const char* LabelText = "Some label";
+    //   jui_label(LabelText, 10, 20);
+    //   if (jui_button("Three", 10, 40, 55, 45))
+    //   {
+    //     printf("Hit the button in the third window!\n");
+    //   }
+    // }
+    // jui_end();
 
     // Render the UI
     jui_render();

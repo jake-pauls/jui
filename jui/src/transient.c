@@ -18,16 +18,7 @@
 /* Forward Declarations */
 
 typedef struct jui_draw_command_parameters jui_draw_command_parameters;
-typedef void (*jui_draw_command)(const jui_draw_command_parameters*);
-typedef struct jui_draw_list jui_draw_list;
-typedef struct jui_sdl_draw_rect_params jui_sdl_draw_rect_params;
-typedef struct jui_sdl_draw_text_params jui_sdl_draw_text_params;
-
-typedef struct jui_state jui_state;
-typedef struct jui_sdl_state jui_sdl_state;
-
 void jui_sdl_draw_impl(const jui_draw_command_parameters* Parameters);
-bool jui_hit_test(f32 X, f32 Y, f32 W, f32 H);
 
 /* Rendering */
 
@@ -44,26 +35,58 @@ struct jui_draw_command_parameters
   jui_draw_command_parameters_type Type;
 };
 
+typedef struct jui_draw_list jui_draw_list;
 struct jui_draw_list
 {
   jui_draw_command_parameters* Parameters[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
   u32 Count;
 };
 
+typedef struct jui_sdl_draw_rect_params jui_sdl_draw_rect_params;
 struct jui_sdl_draw_rect_params
 {
   jui_rect Rect;
   jui_color Color;
 };
 
+typedef struct jui_sdl_draw_text_params jui_sdl_draw_text_params;
 struct jui_sdl_draw_text_params
 {
   const char* Text;
   jui_v2 Position;
 };
 
+/* Interactions */
+
+typedef enum jui_box_flags jui_box_flags;
+enum jui_box_flags
+{
+  JuiBoxFlags_None = 0 << 0,
+  JuiBoxFlags_Clickable = 1 << 0,
+
+  JuiBoxFlags_Active = 1 << 1,
+  JuiBoxFlags_Hot = 1 << 2
+};
+
+typedef struct jui_box jui_box;
+struct jui_box
+{
+  f32 X, Y, W, H;
+  jui_id Id;
+  jui_box_flags BoxFlags;
+};
+
+typedef enum jui_interaction_status jui_interaction_status;
+enum jui_interaction_status
+{
+  JuiInteractionStatus_Clicked = 1 << 0,
+  JuiInteractionStatus_Active = 1 << 1,
+  JuiInteractionStatus_Hot = 1 << 2,
+};
+
 /* State */
 
+typedef struct jui_state jui_state;
 struct jui_state
 {
   f32 MouseX;
@@ -72,6 +95,7 @@ struct jui_state
   bool MouseDown;
   bool MousePressed;
   bool MouseReleased;
+  bool MouseClicked;
 
   arena AppArena;
   arena FrameArena;
@@ -82,6 +106,7 @@ struct jui_state
   jui_id ActiveItemId;
 };
 
+typedef struct jui_sdl_state jui_sdl_state;
 struct jui_sdl_state
 {
   SDL_Renderer* Renderer;
@@ -93,6 +118,7 @@ static jui_state State = {
     .MouseDown = false,
     .MousePressed = false,
     .MouseReleased = false,
+    .MouseClicked = false,
     .AppArena =
         {
             .Base = NULL,
@@ -131,12 +157,14 @@ void jui_sdl_consume_event(const SDL_Event* Event)
     {
       State.MouseDown = true;
       State.MousePressed = true;
+      State.MouseReleased = false;
     }
     break;
   case SDL_EVENT_MOUSE_BUTTON_UP:
     if (Event->button.button == SDL_BUTTON_LEFT)
     {
       State.MouseDown = false;
+      State.MousePressed = false;
       State.MouseReleased = true;
     }
     break;
@@ -158,11 +186,7 @@ void jui_start_frame()
   // At the start of each frame clear the frame-by-frame memory arena.
   arena_clear(&State.FrameArena);
 
-  // Clearing global state
-  State.HotItemId = DEFAULT_WIDGET_ID;
-  State.ActiveItemId = DEFAULT_WIDGET_ID;
-
-  // Reset the mouse pressed/released state every time an event is consumed. State.MousePressed = false; State.MouseReleased = false;
+  // Reset the mouse pressed/released state every time an event is consumed.
   State.MousePressed = false;
   State.MouseReleased = false;
 
@@ -172,7 +196,7 @@ void jui_start_frame()
 
 void jui_render()
 {
-  for (size_t I = 0; I < State.DrawList.Count; ++I)
+  for (u32 I = 0; I < State.DrawList.Count; ++I)
   {
     const jui_draw_command_parameters* const Parameters = State.DrawList.Parameters[I];
     jui_sdl_draw_impl(Parameters);
@@ -286,34 +310,6 @@ bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
   return !(State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H);
 }
 
-/// @NewAPI
-
-typedef enum jui_box_flags jui_box_flags;
-enum jui_box_flags
-{
-  JuiBoxFlags_None = 0 << 0,
-  JuiBoxFlags_Clickable = 1 << 0,
-
-  JuiBoxFlags_Active = 1 << 1,
-  JuiBoxFlags_Hot = 1 << 2
-};
-
-typedef struct jui_box jui_box;
-struct jui_box
-{
-  f32 X, Y, W, H;
-  jui_id Id;
-  jui_box_flags BoxFlags;
-};
-
-typedef enum jui_interaction_status jui_interaction_status;
-enum jui_interaction_status
-{
-  JuiInteractionStatus_Clicked = 1 << 0,
-  JuiInteractionStatus_Active = 1 << 1,
-  JuiInteractionStatus_Hot = 1 << 2,
-};
-
 static bool jui_is_box_clickable(const jui_box_flags BoxFlags)
 {
   return BoxFlags & JuiBoxFlags_Clickable;
@@ -336,7 +332,7 @@ static bool jui_is_hot(const jui_interaction_status Interaction)
   return Interaction & JuiInteractionStatus_Hot;
 }
 
-void jui_box_submit_draw_command(const jui_rect Rect, jui_color Color, const jui_interaction_status Interaction)
+void jui_box_submit_draw_command(const jui_rect Rect, const jui_color Color, const jui_interaction_status Interaction)
 {
   // Draw main rect.
   jui_create_draw_rect_command(Rect, Color);
@@ -345,15 +341,20 @@ void jui_box_submit_draw_command(const jui_rect Rect, jui_color Color, const jui
   if (jui_is_active(Interaction))
   {
     // 12% opacity for active colors (255 * 0.12 ~= 31).
-    jui_color White = {.R = 255, .G = 255, .B = 255, .A = 31};
-    jui_create_draw_rect_command(Rect, White);
+    const jui_color TwelvePercentWhite = {.R = 255, .G = 255, .B = 255, .A = 31};
+    jui_create_draw_rect_command(Rect, TwelvePercentWhite);
   }
   else if (jui_is_hot(Interaction))
   {
     // 8% opacity for hover colors (255 * 0.08 ~= 204).
-    jui_color White = {.R = 255, .G = 255, .B = 255, .A = 204};
-    jui_create_draw_rect_command(Rect, White);
+    const jui_color EightPercentWhite = {.R = 255, .G = 255, .B = 255, .A = 204};
+    jui_create_draw_rect_command(Rect, EightPercentWhite);
   }
+}
+
+void jui_text_submit_draw_command(const jui_v2 Position, const char* Text)
+{
+  jui_create_draw_text_command(Position, Text);
 }
 
 // TODO(jake): Ideally when we have layouts there's no rect information here?
@@ -380,7 +381,7 @@ jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, cons
     }
 
     // The button is in it's "active" state when it's hot and the mouse is down.
-    if (jui_is_box_hot(Box->BoxFlags) && State.MouseDown && State.ActiveItemId == DEFAULT_WIDGET_ID)
+    if ((jui_is_box_hot(Box->BoxFlags) && State.MouseDown && State.ActiveItemId == DEFAULT_WIDGET_ID) || State.ActiveItemId == Box->Id)
     {
       Box->BoxFlags |= JuiBoxFlags_Active;
       State.ActiveItemId = Box->Id;
@@ -390,25 +391,24 @@ jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, cons
   return Box;
 }
 
+#include <stdio.h>
+
 jui_interaction_status jui_box_process_interaction(const jui_box* Box)
 {
   jui_interaction_status Interaction = {0};
 
   // The button is pressed when it's active, hot, and the mouse is released this frame.
   // This is a "completed" interaction, so reset the active item as well.
-  if (Box->BoxFlags & (JuiBoxFlags_Active | JuiBoxFlags_Hot) && State.MouseReleased)
+  if (Box->BoxFlags & JuiBoxFlags_Active && State.MouseReleased)
   {
-    Interaction |= JuiInteractionStatus_Clicked;
-    State.ActiveItemId = DEFAULT_WIDGET_ID;
-  }
-  // The hot item does not match the active item, and the active item this widget. This is
-  // equivalent to the mouse leaving an active item mid-interaction (e.g., the mouse leaving
-  // the button mid-press) and is often treated as a "cancellation" of the user's interaction.
-  //
-  // Most widgets will require some check like this. The clickable area for a draggable component
-  // is one exemption because the mouse 'locks' while you're dragging it, not requiring a cancel.
-  else if (!(Box->BoxFlags & (JuiBoxFlags_Hot | JuiBoxFlags_Active)) && State.MouseReleased)
-  {
+    if (Box->BoxFlags & JuiBoxFlags_Hot)
+    {
+      Interaction |= JuiInteractionStatus_Clicked;
+    }
+
+    // Ensures that if the active item is no longer hot the default widget resets and the interaction
+    // isn't clicked. This is equivalent to the mouse leaving an active item mid-interaction (e.g., the
+    // mouse leaving the button mid-press) and is often treated as a "cancellation" of the user's interaction.
     State.ActiveItemId = DEFAULT_WIDGET_ID;
   }
 
@@ -416,7 +416,7 @@ jui_interaction_status jui_box_process_interaction(const jui_box* Box)
   {
     Interaction |= JuiInteractionStatus_Active;
   }
-  else if (Box->BoxFlags & JuiBoxFlags_Hot)
+  if (Box->BoxFlags & JuiBoxFlags_Hot)
   {
     Interaction |= JuiInteractionStatus_Hot;
   }
@@ -436,16 +436,15 @@ void jui_panel(const char* Text, const f32 W, const f32 H)
   const jui_box* Box = jui_box_create(&State.FrameArena, Rect, Id, JuiBoxFlags_None);
   const jui_interaction_status Interaction = jui_box_process_interaction(Box);
 
-  jui_color Color = {.R = 255, .G = 255, .B = 255, .A = 255};
+  const jui_color Color = {.R = 127, .G = 127, .B = 127, .A = 255};
   jui_box_submit_draw_command(Rect, Color, Interaction);
 }
 
 void jui_label(const char* Text, const f32 X, const f32 Y)
 {
   // TODO(jake): Needs to check parent container position.
-  // const jui_v2 LabelPosition = {.V = {X, Y}};
-  // TODO(jake): Needs to actually be hooked up to the rendering architecture
-  // sdl_draw_text_impl(SDLState.Renderer, Text, LabelPosition);
+  const jui_v2 LabelPosition = {.V = {X, Y}};
+  jui_text_submit_draw_command(LabelPosition, Text);
 }
 
 bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
@@ -458,8 +457,12 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   const jui_box* Box = jui_box_create(&State.FrameArena, Rect, Id, JuiBoxFlags_Clickable);
   const jui_interaction_status Interaction = jui_box_process_interaction(Box);
 
-  jui_color Color = {.R = 98, .G = 0, .B = 238, .A = 255};
+  const jui_color Color = {.R = 98, .G = 0, .B = 238, .A = 255};
   jui_box_submit_draw_command(Rect, Color, Interaction);
+
+  // TODO(jake): Needs to check parent container position.
+  const jui_v2 TextPosition = {.X = X, .Y = Y + H / 2.0f};
+  jui_text_submit_draw_command(TextPosition, Text);
 
   return jui_is_clicked(Interaction);
 }

@@ -2,8 +2,12 @@
 
 #include "jui/types.h"
 
-#include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
+
+/* Forward Declarations */
+
+struct arena;
 
 /* Core Structures */
 
@@ -11,28 +15,17 @@
 typedef u64 jui_id;
 
 /// \brief Represents a two-float vector. Used to represent arbitrary vectors.
-typedef union jui_v2 jui_v2;
-union jui_v2
+typedef struct jui_v2 jui_v2;
+struct jui_v2
 {
-  struct
-  {
-    f32 X;
-    f32 Y;
-  };
-  f32 V[2];
+  f32 X, Y;
 };
 
 /// \brief Represents a three-float vector. Used to represent arbitrary vectors.
-typedef union jui_v3 jui_v3;
-union jui_v3
+typedef struct jui_v3 jui_v3;
+struct jui_v3
 {
-  struct
-  {
-    f32 X;
-    f32 Y;
-    f32 Z;
-  };
-  f32 V[3];
+  f32 X, Y, Z;
 };
 
 /// \brief Represents a rectangle using floating point values.
@@ -49,19 +42,45 @@ struct jui_color
   u8 R, G, B, A;
 };
 
-/* Math */
-
-#define JUI_EPSILON 0.00001f
-
-static bool almost_equal(const f32 A, const f32 B, const f32 Epsilon)
+/// \brief Represents a view of a string with a length.
+typedef struct jui_str jui_str;
+struct jui_str
 {
-  return fabs(B - A) < Epsilon;
-}
+  const char* Data;
+  size_t Length;
+};
+
+/* Strings */
+
+/// \brief Checks if the provided string view is empty.
+/// \param View The string view to check the length of.
+/// \return <c>true</c> if the underlying string view is empty, otherwise <c>false</c>.
+/// \remarks This only checks the <c>Length</c> property of the string view, and will <b>not</b> evaluate the underlying pointer.
+bool str_is_empty(const jui_str* View);
+
+/// \brief Creates a string view for a provided C string with a length.
+/// \param Data The C string underlying the string view.
+/// \param Length The length of the string view.
+/// \return View of the created string.
+jui_str str_create(const char* Data, size_t Length);
+
+/// \brief Retrieves a view of a substring inside a provided source string view.
+/// \param StartIndex The starting index for the substring.
+/// \param EndIndex The end index for the substring.
+/// \param View The string view to substring.
+/// \return View of the substring from the provided view.
+/// \remark Will return an empty string view if the <c>EndIndex</c> is greater than the <c>StartIndex</c> or if the underlying view is <c>NULL</c>.
+jui_str str_substring(size_t StartIndex, size_t EndIndex, const jui_str* View);
+
+/// \brief Converts a string view to a C string with the null-terminator.
+/// \param Arena The memory arena to perform the allocations for the underlying C string in.
+/// \param View The view to create a C string from.
+char* str_to_cstr(struct arena* Arena, const jui_str* View);
 
 /* Hashing */
 
 /// \brief djb2 hash function for strings. The hash function itself has
-///        clever properties that make it well-suited for hashing strings:
+///         clever properties that make it well-suited for hashing strings:
 ///
 /// 1. Use of <c>unsigned char</c> ensures that incoming bytes are guaranteed to
 ///    be in the range 0 <= C <= 255.

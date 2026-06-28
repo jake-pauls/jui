@@ -62,18 +62,18 @@ int main()
     jui_panel("Window One", 156, 128);
     {
       const char* LabelText = "Label";
-      jui_label(LabelText, 10, 20);
+      jui_label(LabelText, 10, 30);
 
       char Buffer[15];
       snprintf(Buffer, sizeof(Buffer), "One: %d", ButtonOneCount);
-      if (jui_button(Buffer, 10, 35, 135, 32))
+      if (jui_button(Buffer, 10, 45, 135, 32))
       {
         printf("Button one pressed: %d\n", ButtonOneCount);
         ButtonOneCount++;
       }
 
       snprintf(Buffer, sizeof(Buffer), "Two: %d", ButtonTwoCount);
-      if (jui_button(Buffer, 10, 72, 135, 48))
+      if (jui_button(Buffer, 10, 82, 135, 48))
       {
         printf("Button two pressed: %d\n", ButtonTwoCount);
         ButtonTwoCount++;

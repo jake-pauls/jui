@@ -13,7 +13,6 @@
 #define MAXIMUM_APP_ARENA_SIZE_BYTES (8192)
 
 #define DEFAULT_WIDGET_ID (0)
-#define UNINITIALIZED_FRAME_POSITION (-1)
 
 /* Forward Declarations */
 
@@ -22,12 +21,11 @@ void jui_sdl_draw_impl(const jui_draw_command_parameters* Parameters);
 
 /* Rendering */
 
-typedef enum jui_draw_command_parameters_type jui_draw_command_parameters_type;
-enum jui_draw_command_parameters_type
+typedef enum jui_draw_command_parameters_type
 {
   DrawCommandParameters_DrawRect,
   DrawCommandParameters_DrawText
-};
+} jui_draw_command_parameters_type;
 
 struct jui_draw_command_parameters
 {
@@ -58,15 +56,14 @@ struct jui_sdl_draw_text_params
 
 /* Interactions */
 
-typedef enum jui_box_flags jui_box_flags;
-enum jui_box_flags
+typedef enum jui_box_flags
 {
   JuiBoxFlags_None = 0 << 0,
   JuiBoxFlags_Clickable = 1 << 0,
 
   JuiBoxFlags_Active = 1 << 1,
   JuiBoxFlags_Hot = 1 << 2
-};
+} jui_box_flags;
 
 typedef struct jui_box jui_box;
 struct jui_box
@@ -76,13 +73,12 @@ struct jui_box
   jui_box_flags BoxFlags;
 };
 
-typedef enum jui_interaction_status jui_interaction_status;
-enum jui_interaction_status
+typedef enum jui_interaction_status
 {
   JuiInteractionStatus_Clicked = 1 << 0,
   JuiInteractionStatus_Active = 1 << 1,
   JuiInteractionStatus_Hot = 1 << 2,
-};
+} jui_interaction_status;
 
 /* State */
 
@@ -277,15 +273,13 @@ void jui_create_draw_rect_command(const jui_rect Rect, const jui_color Color)
   State.DrawList.Parameters[State.DrawList.Count++] = CommandParams;
 }
 
-void jui_create_draw_text_command(const jui_v2 Position, const char* const Text)
+void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
 {
   jui_sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_sdl_draw_text_params);
 
-  // TODO(jake): Need to make some string abstractions.
-  char* AllocatedText = PUSH_ARRAY_ZERO(&State.FrameArena, char, strlen(Text) + 1);
-  strcpy(&AllocatedText[0], &Text[0]);
+  char* TextCString = str_to_cstr(&State.FrameArena, Text);
 
-  DrawTextParams->Text = AllocatedText;
+  DrawTextParams->Text = TextCString;
   DrawTextParams->Position.X = Position.X + 2;
   DrawTextParams->Position.Y = Position.Y + 2;
 
@@ -352,7 +346,7 @@ void jui_box_submit_draw_command(const jui_rect Rect, const jui_color Color, con
   }
 }
 
-void jui_text_submit_draw_command(const jui_v2 Position, const char* Text)
+void jui_text_submit_draw_command(const jui_v2 Position, const jui_str* Text)
 {
   jui_create_draw_text_command(Position, Text);
 }
@@ -426,30 +420,76 @@ jui_interaction_status jui_box_process_interaction(const jui_box* Box)
 
 /* "Widgets" - "These should be made of Lego blocks." */
 
-void jui_panel(const char* Text, const f32 W, const f32 H)
-{
-  const jui_id Id = hash_djb2((uchar*)Text);
-
-  // TODO(jake): Panels are logically the "top" container for now, but maybe they could have some other starting position?
-  const jui_rect Rect = {.X = 0.0f, .Y = 0.0f, .W = W, .H = H};
-  // For the moment this panel is just a non-clickable box.
-  const jui_box* Box = jui_box_create(&State.FrameArena, Rect, Id, JuiBoxFlags_None);
-  const jui_interaction_status Interaction = jui_box_process_interaction(Box);
-
-  const jui_color Color = {.R = 127, .G = 127, .B = 127, .A = 255};
-  jui_box_submit_draw_command(Rect, Color, Interaction);
-}
-
 void jui_label(const char* Text, const f32 X, const f32 Y)
 {
   // TODO(jake): Needs to check parent container position.
-  const jui_v2 LabelPosition = {.V = {X, Y}};
-  jui_text_submit_draw_command(LabelPosition, Text);
+  const jui_v2 LabelPosition = {.X = X, .Y = Y};
+
+  const size_t TextLength = strlen(Text);
+  const jui_str TextString = str_create(Text, TextLength);
+
+  // Check if an extra (invisible) identifier is appended to the string.
+  const char* IdentifierIndex = strstr(Text, "###");
+  if (IdentifierIndex != NULL)
+  {
+    const size_t SubstringIndex = IdentifierIndex - Text;
+    const jui_str TextWithoutId = str_substring(0, SubstringIndex, &TextString);
+    jui_text_submit_draw_command(LabelPosition, &TextWithoutId);
+  }
+  else
+  {
+    jui_text_submit_draw_command(LabelPosition, &TextString);
+  }
+}
+
+void jui_panel(const char* Text, const f32 W, const f32 H)
+{
+  char TextWithExtraIdBuffer[200];
+  const size_t TextLength = strlen(Text) + 1;
+
+  const f32 GripHeight = H / 8.0f;
+
+  // The top area is a clickable box (panel grip).
+  {
+    strncpy(TextWithExtraIdBuffer, Text, TextLength);
+    strcat(TextWithExtraIdBuffer, "###PanelGrip");
+    const jui_id PanelGripId = hash_djb2((uchar*)TextWithExtraIdBuffer);
+
+    const jui_rect GripRect = {.X = 0.0f, .Y = 0.0f, .W = W, .H = GripHeight};
+    // TODO(jake): This Id is cooked. Figure out how to solve widgets with multiple pieces.
+    const jui_box* GripBox = jui_box_create(&State.FrameArena, GripRect, PanelGripId, JuiBoxFlags_Clickable);
+    const jui_interaction_status GripBoxInteraction = jui_box_process_interaction(GripBox);
+    const jui_color GripBoxColor = {.R = 125, .G = 50, .B = 200, .A = 255};
+    jui_box_submit_draw_command(GripRect, GripBoxColor, GripBoxInteraction);
+  }
+
+  // The grip should contain the window title.
+  {
+    strncpy(TextWithExtraIdBuffer, Text, TextLength);
+    strcat(TextWithExtraIdBuffer, "###PanelText");
+    jui_label(TextWithExtraIdBuffer, 0.0f, 0.0f);
+  }
+
+  // For the moment the content area is just a non-clickable box.
+  {
+    strncpy(TextWithExtraIdBuffer, Text, TextLength);
+    strcat(TextWithExtraIdBuffer, "###PanelContentArea");
+    const jui_id PanelContentId = hash_djb2((uchar*)TextWithExtraIdBuffer);
+
+    const jui_rect ContentRect = {.X = 0.0f, .Y = GripHeight, .W = W, .H = H};
+    const jui_box* ContentBox = jui_box_create(&State.FrameArena, ContentRect, PanelContentId, JuiBoxFlags_None);
+    const jui_interaction_status ContentBoxInteraction = jui_box_process_interaction(ContentBox);
+    const jui_color ContentBoxColor = {.R = 127, .G = 127, .B = 127, .A = 255};
+    jui_box_submit_draw_command(ContentRect, ContentBoxColor, ContentBoxInteraction);
+  }
 }
 
 bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   const jui_id Id = hash_djb2((uchar*)Text);
+
+  const size_t TextLength = strlen(Text);
+  const jui_str TextString = str_create(Text, TextLength);
 
   // TODO(jake): Needs to check parent container position.
   const jui_rect Rect = {.X = X, .Y = Y, .W = W, .H = H};
@@ -462,7 +502,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
 
   // TODO(jake): Needs to check parent container position.
   const jui_v2 TextPosition = {.X = X, .Y = Y + H / 2.0f};
-  jui_text_submit_draw_command(TextPosition, Text);
+  jui_text_submit_draw_command(TextPosition, &TextString);
 
   return jui_is_clicked(Interaction);
 }

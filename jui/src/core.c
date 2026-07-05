@@ -23,6 +23,12 @@ jui_str str_create(const char* Data, const size_t Length)
   return View;
 }
 
+jui_str str_create_from_cstr(const char* Data)
+{
+  const jui_str View = {.Data = Data, .Length = strlen(Data)};
+  return View;
+}
+
 jui_str str_substring(const size_t StartIndex, const size_t EndIndex, const jui_str* View)
 {
   // Return an empty string if the substring source or indices are invalid.

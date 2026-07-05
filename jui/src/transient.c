@@ -170,14 +170,14 @@ void jui_sdl_consume_event(const SDL_Event* Event)
 
 /* Lifecycle (General) */
 
-void jui_internal_init()
+void jui_internal_init(void)
 {
   // Allocate the frame-by-frame memory arena.
   arena_alloc(&State.AppArena, MAXIMUM_APP_ARENA_SIZE_BYTES);
   arena_alloc(&State.FrameArena, MAXIMUM_FRAME_ARENA_SIZE_BYTES);
 }
 
-void jui_start_frame()
+void jui_start_frame(void)
 {
   // At the start of each frame clear the frame-by-frame memory arena.
   arena_clear(&State.FrameArena);
@@ -190,7 +190,7 @@ void jui_start_frame()
   State.DrawList.Count = 0;
 }
 
-void jui_render()
+void jui_render(void)
 {
   for (u32 I = 0; I < State.DrawList.Count; ++I)
   {
@@ -199,7 +199,7 @@ void jui_render()
   }
 }
 
-void jui_teardown()
+void jui_teardown(void)
 {
   arena_clear(&State.AppArena);
   arena_free(&State.AppArena);
@@ -277,7 +277,7 @@ void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
 {
   jui_sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_sdl_draw_text_params);
 
-  char* TextCString = str_to_cstr(&State.FrameArena, Text);
+  const char* TextCString = str_to_cstr(&State.FrameArena, Text);
 
   DrawTextParams->Text = TextCString;
   DrawTextParams->Position.X = Position.X + 2;
@@ -385,8 +385,6 @@ jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, cons
   return Box;
 }
 
-#include <stdio.h>
-
 jui_interaction_status jui_box_process_interaction(const jui_box* Box)
 {
   jui_interaction_status Interaction = {0};
@@ -424,9 +422,7 @@ void jui_label(const char* Text, const f32 X, const f32 Y)
 {
   // TODO(jake): Needs to check parent container position.
   const jui_v2 LabelPosition = {.X = X, .Y = Y};
-
-  const size_t TextLength = strlen(Text);
-  const jui_str TextString = str_create(Text, TextLength);
+  const jui_str TextString = str_create_from_cstr(Text);
 
   // Check if an extra (invisible) identifier is appended to the string.
   const char* IdentifierIndex = strstr(Text, "###");
@@ -444,6 +440,7 @@ void jui_label(const char* Text, const f32 X, const f32 Y)
 
 void jui_panel(const char* Text, const f32 W, const f32 H)
 {
+  // TODO(jake): Remove fixed buffer?
   char TextWithExtraIdBuffer[200];
   const size_t TextLength = strlen(Text) + 1;
 
@@ -466,7 +463,7 @@ void jui_panel(const char* Text, const f32 W, const f32 H)
   // The grip should contain the window title.
   {
     strncpy(TextWithExtraIdBuffer, Text, TextLength);
-    strcat(TextWithExtraIdBuffer, "###PanelText");
+    strcat(TextWithExtraIdBuffer, "###PanelGripText");
     jui_label(TextWithExtraIdBuffer, 0.0f, 0.0f);
   }
 
@@ -487,9 +484,7 @@ void jui_panel(const char* Text, const f32 W, const f32 H)
 bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   const jui_id Id = hash_djb2((uchar*)Text);
-
-  const size_t TextLength = strlen(Text);
-  const jui_str TextString = str_create(Text, TextLength);
+  const jui_str TextString = str_create_from_cstr(Text);
 
   // TODO(jake): Needs to check parent container position.
   const jui_rect Rect = {.X = X, .Y = Y, .W = W, .H = H};

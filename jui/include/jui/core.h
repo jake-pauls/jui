@@ -64,6 +64,11 @@ bool str_is_empty(const jui_str* View);
 /// \return View of the created string.
 jui_str str_create(const char* Data, size_t Length);
 
+/// \brief Creates a string view for a provided C string, infers length using <c>strlen</c>.
+/// \param Data The C string underlying the string view.
+/// \return View of the created string.
+jui_str str_create_from_cstr(const char* Data);
+
 /// \brief Retrieves a view of a substring inside a provided source string view.
 /// \param StartIndex The starting index for the substring.
 /// \param EndIndex The end index for the substring.

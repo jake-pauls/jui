@@ -36,7 +36,7 @@ struct jui_draw_command_parameters
 typedef struct jui_draw_list jui_draw_list;
 struct jui_draw_list
 {
-  jui_draw_command_parameters* Parameters[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
+  jui_draw_command_parameters* Array[MAXIMUM_DRAW_LIST_SIZE_PER_FRAME];
   u32 Count;
 };
 
@@ -108,35 +108,19 @@ struct jui_sdl_state
   SDL_Renderer* Renderer;
 };
 
-static jui_state State = {
-    .MouseX = 0,
-    .MouseY = 0,
-    .MouseDown = false,
-    .MousePressed = false,
-    .MouseReleased = false,
-    .MouseClicked = false,
-    .AppArena =
-        {
-            .Base = NULL,
-            .Position = 0,
-        },
-    .FrameArena =
-        {
-            .Base = NULL,
-            .Position = 0,
-        },
-    .DrawList =
-        {
-            .Parameters = {0},
-            .Count = 0,
-        },
-    .HotItemId = DEFAULT_WIDGET_ID,
-    .ActiveItemId = DEFAULT_WIDGET_ID,
-};
+static jui_state State = {.MouseX = 0,
+                          .MouseY = 0,
+                          .MouseDown = false,
+                          .MousePressed = false,
+                          .MouseReleased = false,
+                          .MouseClicked = false,
+                          .AppArena = {.Base = NULL, .Position = 0},
+                          .FrameArena = {.Base = NULL, .Position = 0},
+                          .DrawList = {.Array = {0}, .Count = 0},
+                          .HotItemId = DEFAULT_WIDGET_ID,
+                          .ActiveItemId = DEFAULT_WIDGET_ID};
 
-static jui_sdl_state SDLState = {
-    .Renderer = NULL,
-};
+static jui_sdl_state SDLState = {.Renderer = NULL};
 
 /* Platform (SDL) */
 
@@ -170,7 +154,7 @@ void jui_sdl_consume_event(const SDL_Event* Event)
 
 /* Lifecycle (General) */
 
-void jui_internal_init(void)
+static void jui_internal_init(void)
 {
   // Allocate the frame-by-frame memory arena.
   arena_alloc(&State.AppArena, MAXIMUM_APP_ARENA_SIZE_BYTES);
@@ -194,7 +178,7 @@ void jui_render(void)
 {
   for (u32 I = 0; I < State.DrawList.Count; ++I)
   {
-    const jui_draw_command_parameters* const Parameters = State.DrawList.Parameters[I];
+    const jui_draw_command_parameters* const Parameters = State.DrawList.Array[I];
     jui_sdl_draw_impl(Parameters);
   }
 }
@@ -215,7 +199,7 @@ void jui_sdl_init(SDL_Renderer* Renderer)
   jui_internal_init();
 }
 
-void jui_sdl_draw_rect_impl(SDL_Renderer* Renderer, const jui_rect Rect, const jui_color Color)
+static void jui_sdl_draw_rect_impl(SDL_Renderer* Renderer, const jui_rect Rect, const jui_color Color)
 {
   SDL_FRect FRect;
   FRect.x = Rect.X;
@@ -227,7 +211,7 @@ void jui_sdl_draw_rect_impl(SDL_Renderer* Renderer, const jui_rect Rect, const j
   SDL_RenderFillRect(Renderer, &FRect);
 }
 
-void jui_sdl_draw_text_impl(SDL_Renderer* Renderer, const char* Text, const jui_v2 Position)
+static void jui_sdl_draw_text_impl(SDL_Renderer* Renderer, const char* Text, const jui_v2 Position)
 {
   SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
   SDL_RenderDebugText(Renderer, Position.X, Position.Y, Text);
@@ -252,7 +236,7 @@ void jui_sdl_draw_impl(const jui_draw_command_parameters* const Parameters)
   }
 }
 
-void jui_create_draw_rect_command(const jui_rect Rect, const jui_color Color)
+static void jui_create_draw_rect_command(const jui_rect Rect, const jui_color Color)
 {
   jui_sdl_draw_rect_params* DrawRectParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_sdl_draw_rect_params);
 
@@ -270,10 +254,10 @@ void jui_create_draw_rect_command(const jui_rect Rect, const jui_color Color)
   CommandParams->Data = DrawRectParams;
   CommandParams->Type = DrawCommandParameters_DrawRect;
 
-  State.DrawList.Parameters[State.DrawList.Count++] = CommandParams;
+  State.DrawList.Array[State.DrawList.Count++] = CommandParams;
 }
 
-void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
+static void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
 {
   jui_sdl_draw_text_params* DrawTextParams = PUSH_STRUCT_ZERO(&State.FrameArena, jui_sdl_draw_text_params);
 
@@ -287,7 +271,7 @@ void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
   CommandParams->Data = DrawTextParams;
   CommandParams->Type = DrawCommandParameters_DrawText;
 
-  State.DrawList.Parameters[State.DrawList.Count++] = CommandParams;
+  State.DrawList.Array[State.DrawList.Count++] = CommandParams;
 }
 
 /* API */
@@ -299,7 +283,7 @@ void jui_create_draw_text_command(const jui_v2 Position, const jui_str* Text)
 /// \param W The width used for the hit test.
 /// \param H The height used for the hit test.
 /// \returns <c>true</c> if the hit test passed for the global state, otherwise <c>false</c>.
-bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
+static bool jui_hit_test(const f32 X, const f32 Y, const f32 W, const f32 H)
 {
   return !(State.MouseX < X || State.MouseY < Y || State.MouseX >= X + W || State.MouseY >= Y + H);
 }
@@ -311,6 +295,10 @@ static bool jui_is_box_clickable(const jui_box_flags BoxFlags)
 static bool jui_is_box_hot(const jui_box_flags BoxFlags)
 {
   return BoxFlags & JuiBoxFlags_Hot;
+}
+static bool jui_is_box_active(const jui_box_flags BoxFlags)
+{
+  return BoxFlags & JuiBoxFlags_Active;
 }
 
 static bool jui_is_clicked(const jui_interaction_status Interaction)
@@ -326,7 +314,7 @@ static bool jui_is_hot(const jui_interaction_status Interaction)
   return Interaction & JuiInteractionStatus_Hot;
 }
 
-void jui_box_submit_draw_command(const jui_rect Rect, const jui_color Color, const jui_interaction_status Interaction)
+static void jui_box_submit_draw_command(const jui_rect Rect, const jui_color Color, const jui_interaction_status Interaction)
 {
   // Draw main rect.
   jui_create_draw_rect_command(Rect, Color);
@@ -346,13 +334,13 @@ void jui_box_submit_draw_command(const jui_rect Rect, const jui_color Color, con
   }
 }
 
-void jui_text_submit_draw_command(const jui_v2 Position, const jui_str* Text)
+static void jui_text_submit_draw_command(const jui_v2 Position, const jui_str* Text)
 {
   jui_create_draw_text_command(Position, Text);
 }
 
 // TODO(jake): Ideally when we have layouts there's no rect information here?
-jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, const jui_box_flags InitialBoxFlags)
+static jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, const jui_box_flags InitialBoxFlags)
 {
   jui_box* Box = PUSH_STRUCT(Arena, jui_box);
 
@@ -385,7 +373,7 @@ jui_box* jui_box_create(arena* Arena, const jui_rect Rect, const jui_id Id, cons
   return Box;
 }
 
-jui_interaction_status jui_box_process_interaction(const jui_box* Box)
+static jui_interaction_status jui_box_process_interaction(const jui_box* Box)
 {
   jui_interaction_status Interaction = {0};
 
@@ -404,11 +392,11 @@ jui_interaction_status jui_box_process_interaction(const jui_box* Box)
     State.ActiveItemId = DEFAULT_WIDGET_ID;
   }
 
-  if (Box->BoxFlags & JuiBoxFlags_Active)
+  if (jui_is_box_active(Box->BoxFlags))
   {
     Interaction |= JuiInteractionStatus_Active;
   }
-  if (Box->BoxFlags & JuiBoxFlags_Hot)
+  if (jui_is_box_hot(Box->BoxFlags))
   {
     Interaction |= JuiInteractionStatus_Hot;
   }
@@ -454,6 +442,7 @@ void jui_panel(const char* Text, const f32 W, const f32 H)
 
     const jui_rect GripRect = {.X = 0.0f, .Y = 0.0f, .W = W, .H = GripHeight};
     // TODO(jake): This Id is cooked. Figure out how to solve widgets with multiple pieces.
+    // TODO(jake): If the boxes need to persist this cannot use a FrameArena.
     const jui_box* GripBox = jui_box_create(&State.FrameArena, GripRect, PanelGripId, JuiBoxFlags_Clickable);
     const jui_interaction_status GripBoxInteraction = jui_box_process_interaction(GripBox);
     const jui_color GripBoxColor = {.R = 125, .G = 50, .B = 200, .A = 255};
@@ -474,6 +463,7 @@ void jui_panel(const char* Text, const f32 W, const f32 H)
     const jui_id PanelContentId = hash_djb2((uchar*)TextWithExtraIdBuffer);
 
     const jui_rect ContentRect = {.X = 0.0f, .Y = GripHeight, .W = W, .H = H};
+    // TODO(jake): If the boxes need to persist this cannot use a FrameArena.
     const jui_box* ContentBox = jui_box_create(&State.FrameArena, ContentRect, PanelContentId, JuiBoxFlags_None);
     const jui_interaction_status ContentBoxInteraction = jui_box_process_interaction(ContentBox);
     const jui_color ContentBoxColor = {.R = 127, .G = 127, .B = 127, .A = 255};
@@ -489,6 +479,7 @@ bool jui_button(const char* Text, const f32 X, const f32 Y, const f32 W, const f
   // TODO(jake): Needs to check parent container position.
   const jui_rect Rect = {.X = X, .Y = Y, .W = W, .H = H};
   // For the moment this button is just a clickable box.
+  // TODO(jake): If the boxes need to persist this cannot use a FrameArena.
   const jui_box* Box = jui_box_create(&State.FrameArena, Rect, Id, JuiBoxFlags_Clickable);
   const jui_interaction_status Interaction = jui_box_process_interaction(Box);
 
